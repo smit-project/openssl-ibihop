@@ -115,7 +115,7 @@
 #define BUFSIZE (1024*16+1)
 #define MAX_MISALIGNMENT 63
 
-#define ALGOR_NUM       30
+#define ALGOR_NUM       31
 #define SIZE_NUM        6
 #define RSA_NUM         7
 #define DSA_NUM         3
@@ -192,7 +192,9 @@ static int AES_cbc_256_encrypt_loop(void *args);
 static int AES_ige_192_encrypt_loop(void *args);
 static int AES_ige_256_encrypt_loop(void *args);
 static int CRYPTO_gcm128_aad_loop(void *args);
+static int RAND_bytes_loop(void *args);
 static int EVP_Update_loop(void *args);
+static int EVP_Update_loop_ccm(void *args);
 static int EVP_Digest_loop(void *args);
 #ifndef OPENSSL_NO_RSA
 static int RSA_sign_loop(void *args);
@@ -225,7 +227,8 @@ static const char *names[ALGOR_NUM] = {
     "aes-128 cbc", "aes-192 cbc", "aes-256 cbc",
     "camellia-128 cbc", "camellia-192 cbc", "camellia-256 cbc",
     "evp", "sha256", "sha512", "whirlpool",
-    "aes-128 ige", "aes-192 ige", "aes-256 ige", "ghash"
+    "aes-128 ige", "aes-192 ige", "aes-256 ige", "ghash",
+    "rand"
 };
 
 static double results[ALGOR_NUM][SIZE_NUM];
@@ -396,6 +399,7 @@ const OPTIONS speed_options[] = {
 #define D_IGE_192_AES   27
 #define D_IGE_256_AES   28
 #define D_GHASH         29
+#define D_RAND          30
 static OPT_PAIR doit_choices[] = {
 #ifndef OPENSSL_NO_MD2
     {"md2", D_MD2},
@@ -461,6 +465,7 @@ static OPT_PAIR doit_choices[] = {
     {"cast5", D_CBC_CAST},
 #endif
     {"ghash", D_GHASH},
+    {"rand", D_RAND},
     {NULL}
 };
 
@@ -834,6 +839,17 @@ static int CRYPTO_gcm128_aad_loop(void *args)
     return count;
 }
 
+static int RAND_bytes_loop(void *args)
+{
+    loopargs_t *tempargs = *(loopargs_t **) args;
+    unsigned char *buf = tempargs->buf;
+    int count;
+
+    for (count = 0; COND(c[D_RAND][testnum]); count++)
+        RAND_bytes(buf, lengths[testnum]);
+    return count;
+}
+
 static long save_count = 0;
 static int decrypt = 0;
 static int EVP_Update_loop(void *args)
@@ -855,6 +871,39 @@ static int EVP_Update_loop(void *args)
         EVP_DecryptFinal_ex(ctx, buf, &outl);
     else
         EVP_EncryptFinal_ex(ctx, buf, &outl);
+    return count;
+}
+/*
+ * CCM does not support streaming. For the purpose of performance measurement,
+ * each message is encrypted using the same (key,iv)-pair. Do not use this
+ * code in your application.
+ */
+static int EVP_Update_loop_ccm(void *args)
+{
+    loopargs_t *tempargs = *(loopargs_t **) args;
+    unsigned char *buf = tempargs->buf;
+    EVP_CIPHER_CTX *ctx = tempargs->ctx;
+    int outl, count;
+    unsigned char tag[12];
+#ifndef SIGALRM
+    int nb_iter = save_count * 4 * lengths[0] / lengths[testnum];
+#endif
+    if (decrypt) {
+        for (count = 0; COND(nb_iter); count++) {
+            EVP_DecryptInit_ex(ctx, NULL, NULL, NULL, iv);
+            EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, sizeof(tag), tag);
+            EVP_DecryptUpdate(ctx, NULL, &outl, NULL, lengths[testnum]);
+            EVP_DecryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
+            EVP_DecryptFinal_ex(ctx, buf, &outl);
+        }
+    } else {
+        for (count = 0; COND(nb_iter); count++) {
+            EVP_EncryptInit_ex(ctx, NULL, NULL, NULL, iv);
+            EVP_EncryptUpdate(ctx, NULL, &outl, NULL, lengths[testnum]);
+            EVP_EncryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
+            EVP_EncryptFinal_ex(ctx, buf, &outl);
+        }
+    }
     return count;
 }
 
@@ -1181,6 +1230,7 @@ static int run_benchmark(int async_jobs,
 int speed_main(int argc, char **argv)
 {
     ENGINE *e = NULL;
+    int (*loopfunc)(void *args);
     loopargs_t *loopargs = NULL;
     int async_init = 0;
     int loopargs_len = 0;
@@ -1663,6 +1713,7 @@ int speed_main(int argc, char **argv)
     c[D_IGE_192_AES][0] = count;
     c[D_IGE_256_AES][0] = count;
     c[D_GHASH][0] = count;
+    c[D_RAND][0] = count;
 
     for (i = 1; i < SIZE_NUM; i++) {
         long l0, l1;
@@ -1681,6 +1732,7 @@ int speed_main(int argc, char **argv)
         c[D_SHA512][i] = c[D_SHA512][0] * 4 * l0 / l1;
         c[D_WHIRLPOOL][i] = c[D_WHIRLPOOL][0] * 4 * l0 / l1;
         c[D_GHASH][i] = c[D_GHASH][0] * 4 * l0 / l1;
+        c[D_RAND][i] = c[D_RAND][0] * 4 * l0 / l1;
 
         l0 = (long)lengths[i - 1];
 
@@ -2261,6 +2313,15 @@ int speed_main(int argc, char **argv)
         }
     }
 #endif
+    if (doit[D_RAND]) {
+        for (testnum = 0; testnum < SIZE_NUM; testnum++) {
+            print_message(names[D_RAND], c[D_RAND][testnum], lengths[testnum]);
+            Time_F(START);
+            count = run_benchmark(async_jobs, RAND_bytes_loop, loopargs);
+            d = Time_F(STOP);
+            print_result(D_RAND, testnum, count, d);
+        }
+    }
 
     if (doit[D_EVP]) {
         if (multiblock && evp_cipher) {
@@ -2299,9 +2360,16 @@ int speed_main(int argc, char **argv)
                                            key16, iv);
                     EVP_CIPHER_CTX_set_padding(loopargs[k].ctx, 0);
                 }
+                switch (EVP_CIPHER_mode(evp_cipher)) {
+                case EVP_CIPH_CCM_MODE:
+                    loopfunc = EVP_Update_loop_ccm;
+                    break;
+                default:
+                    loopfunc = EVP_Update_loop;
+                }
 
                 Time_F(START);
-                count = run_benchmark(async_jobs, EVP_Update_loop, loopargs);
+                count = run_benchmark(async_jobs, loopfunc, loopargs);
                 d = Time_F(STOP);
                 for (k = 0; k < loopargs_len; k++) {
                     EVP_CIPHER_CTX_free(loopargs[k].ctx);
@@ -2870,7 +2938,7 @@ int speed_main(int argc, char **argv)
     }
     OPENSSL_free(loopargs);
     release_engine(e);
-    return (ret);
+    return ret;
 }
 
 static void print_message(const char *s, long num, int length)

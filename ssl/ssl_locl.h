@@ -163,6 +163,8 @@
 # define SSL_kEDH                SSL_kDHE
 /* ephemeral ECDH */
 # define SSL_kECDHE              0x00000004U
+/* IBIHOP */
+# define SSL_IBIHOP				 0x10000000U
 /* synonym */
 # define SSL_kEECDH              SSL_kECDHE
 /* PSK */
@@ -541,9 +543,9 @@ struct ssl_session_st {
 # ifndef OPENSSL_NO_EC
         size_t ecpointformats_len;
         unsigned char *ecpointformats; /* peer's list */
+# endif                         /* OPENSSL_NO_EC */
         size_t supportedgroups_len;
         uint16_t *supportedgroups; /* peer's list */
-# endif                         /* OPENSSL_NO_EC */
     /* RFC4507 info */
         unsigned char *tick; /* Session ticket */
         size_t ticklen;      /* Session ticket length */
@@ -1202,10 +1204,10 @@ struct ssl_st {
         size_t ecpointformats_len;
         /* our list */
         unsigned char *ecpointformats;
+# endif                         /* OPENSSL_NO_EC */
         size_t supportedgroups_len;
         /* our list */
         uint16_t *supportedgroups;
-# endif                         /* OPENSSL_NO_EC */
         /* TLS Session Ticket extension override */
         TLS_SESSION_TICKET_EXT *session_ticket;
         /* TLS Session Ticket extension callback */
@@ -2085,6 +2087,13 @@ static ossl_inline int ssl_has_cert(const SSL *s, int idx)
         && s->cert->pkeys[idx].privatekey != NULL;
 }
 
+static ossl_inline void tls1_get_peer_groups(SSL *s, const uint16_t **pgroups,
+                                             size_t *pgroupslen)
+{
+    *pgroups = s->session->ext.supportedgroups;
+    *pgroupslen = s->session->ext.supportedgroups_len;
+}
+
 # ifndef OPENSSL_UNIT_TEST
 
 __owur int ssl_read_internal(SSL *s, void *buf, size_t num, size_t *readbytes);
@@ -2095,6 +2104,7 @@ __owur CERT *ssl_cert_new(void);
 __owur CERT *ssl_cert_dup(CERT *cert);
 void ssl_cert_clear_certs(CERT *c);
 void ssl_cert_free(CERT *c);
+__owur int ssl_generate_session_id(SSL *s, SSL_SESSION *ss);
 __owur int ssl_get_new_session(SSL *s, int session);
 __owur int ssl_get_prev_session(SSL *s, CLIENTHELLO_MSG *hello, int *al);
 __owur SSL_SESSION *ssl_session_dup(SSL_SESSION *src, int ticket);
@@ -2339,7 +2349,7 @@ SSL_COMP *ssl3_comp_find(STACK_OF(SSL_COMP) *sk, int n);
 #  ifndef OPENSSL_NO_EC
 
 __owur const TLS_GROUP_INFO *tls1_group_id_lookup(uint16_t curve_id);
-__owur int tls1_check_curve(SSL *s, const unsigned char *p, size_t len);
+__owur int tls1_check_group_id(SSL *s, uint16_t group_id);
 __owur uint16_t tls1_shared_group(SSL *s, int nmatch);
 __owur int tls1_set_groups(uint16_t **pext, size_t *pextlen,
                            int *curves, size_t ncurves);
@@ -2353,8 +2363,8 @@ __owur EVP_PKEY *ssl_generate_param_group(uint16_t id);
 #  endif                        /* OPENSSL_NO_EC */
 
 __owur int tls_curve_allowed(SSL *s, uint16_t curve, int op);
-void tls1_get_grouplist(SSL *s, int sess, const uint16_t **pcurves,
-                        size_t *num_curves);
+void tls1_get_supported_groups(SSL *s, const uint16_t **pgroups,
+                               size_t *pgroupslen);
 
 __owur int tls1_set_server_sigalgs(SSL *s);
 

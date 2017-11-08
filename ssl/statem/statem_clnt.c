@@ -391,10 +391,6 @@ static WRITE_TRAN ossl_statem_client13_write_transition(SSL *s)
         /* We only hit this in the case of HelloRetryRequest */
         return WRITE_TRAN_FINISHED;
 
-    case TLS_ST_CR_HELLO_RETRY_REQUEST:
-        st->hand_state = TLS_ST_CW_CLNT_HELLO;
-        return WRITE_TRAN_CONTINUE;
-
     case TLS_ST_CR_FINISHED:
         if (s->early_data_state == SSL_EARLY_DATA_WRITE_RETRY
                 || s->early_data_state == SSL_EARLY_DATA_FINISHED_WRITING)
@@ -499,6 +495,10 @@ WRITE_TRAN ossl_statem_client_write_transition(SSL *s)
          * we will be sent
          */
         return WRITE_TRAN_FINISHED;
+
+    case TLS_ST_CR_HELLO_RETRY_REQUEST:
+        st->hand_state = TLS_ST_CW_CLNT_HELLO;
+        return WRITE_TRAN_CONTINUE;
 
     case TLS_ST_EARLY_DATA:
         return WRITE_TRAN_FINISHED;
@@ -661,6 +661,7 @@ WORK_STATE ossl_statem_client_pre_work(SSL *s, WORK_STATE wst)
  */
 WORK_STATE ossl_statem_client_post_work(SSL *s, WORK_STATE wst)
 {
+	//printf("\n+++In function: WORK_STATE ossl_statem_client_post_work(SSL *s, WORK_STATE wst)/statem_clnt.c\n");
     OSSL_STATEM *st = &s->statem;
 
     s->init_num = 0;
@@ -671,6 +672,7 @@ WORK_STATE ossl_statem_client_post_work(SSL *s, WORK_STATE wst)
         break;
 
     case TLS_ST_CW_CLNT_HELLO:
+    	printf("\n+++In case TLS_ST_CW_CLNT_HELLO\n");
         if (wst == WORK_MORE_A && statem_flush(s) != 1)
             return WORK_MORE_A;
 
@@ -693,6 +695,7 @@ WORK_STATE ossl_statem_client_post_work(SSL *s, WORK_STATE wst)
         break;
 
     case TLS_ST_CW_END_OF_EARLY_DATA:
+    	printf("\n+++In case TLS_ST_CW_END_OF_EARLY_DATA ossl_statem_client_post_work\n");
         /*
          * We set the enc_write_ctx back to NULL because we may end up writing
          * in cleartext again if we get a HelloRetryRequest from the server.
@@ -702,11 +705,13 @@ WORK_STATE ossl_statem_client_post_work(SSL *s, WORK_STATE wst)
         break;
 
     case TLS_ST_CW_KEY_EXCH:
+    	printf("\n+++In case TLS_ST_CW_KEY_EXCH\n");
         if (tls_client_key_exchange_post_work(s) == 0)
             return WORK_ERROR;
         break;
 
     case TLS_ST_CW_CHANGE:
+    	printf("\n+++In case TLS_ST_CW_CHANGE\n");
         s->session->cipher = s->s3->tmp.new_cipher;
 #ifdef OPENSSL_NO_COMP
         s->session->compress_meth = 0;
@@ -924,6 +929,7 @@ MSG_PROCESS_RETURN ossl_statem_client_process_message(SSL *s, PACKET *pkt)
         return MSG_PROCESS_ERROR;
 
     case TLS_ST_CR_SRVR_HELLO:
+    	printf("\n+++In case TLS_ST_CR_SRVR_HELLO  ossl_statem_client_process_message\n");
         return tls_process_server_hello(s, pkt);
 
     case DTLS_ST_CR_HELLO_VERIFY_REQUEST:
@@ -942,6 +948,7 @@ MSG_PROCESS_RETURN ossl_statem_client_process_message(SSL *s, PACKET *pkt)
         return tls_process_cert_status(s, pkt);
 
     case TLS_ST_CR_KEY_EXCH:
+    	printf("\n+++In case TLS_ST_CR_KEY_EXCH  ossl_statem_client_process_message\n");
         return tls_process_key_exchange(s, pkt);
 
     case TLS_ST_CR_CERT_REQ:
@@ -1035,8 +1042,9 @@ int tls_construct_client_hello(SSL *s, WPACKET *pkt)
                 break;
             }
         }
-    } else
-        i = 1;
+    } else {
+        i = s->hello_retry_request == 0;
+    }
 
     if (i && ssl_fill_hello_random(s, 0, p, sizeof(s->s3->client_random),
                                    DOWNGRADE_NONE) <= 0)
@@ -1557,7 +1565,6 @@ MSG_PROCESS_RETURN tls_process_server_hello(SSL *s, PACKET *pkt)
 static MSG_PROCESS_RETURN tls_process_hello_retry_request(SSL *s, PACKET *pkt)
 {
     unsigned int sversion;
-    int errorcode;
     const unsigned char *cipherchars;
     RAW_EXTENSION *extensions = NULL;
     int al;
@@ -1569,6 +1576,13 @@ static MSG_PROCESS_RETURN tls_process_hello_retry_request(SSL *s, PACKET *pkt)
         goto f_err;
     }
 
+    /* TODO(TLS1.3): Remove the TLS1_3_VERSION_DRAFT clause before release */
+    if (sversion != TLS1_3_VERSION && sversion != TLS1_3_VERSION_DRAFT) {
+        SSLerr(SSL_F_TLS_PROCESS_HELLO_RETRY_REQUEST, SSL_R_WRONG_SSL_VERSION);
+        al = SSL_AD_PROTOCOL_VERSION;
+        goto f_err;
+    }
+
     s->hello_retry_request = 1;
 
     /*
@@ -1577,13 +1591,6 @@ static MSG_PROCESS_RETURN tls_process_hello_retry_request(SSL *s, PACKET *pkt)
      */
     EVP_CIPHER_CTX_free(s->enc_write_ctx);
     s->enc_write_ctx = NULL;
-
-    /* This will fail if it doesn't choose TLSv1.3+ */
-    errorcode = ssl_choose_client_version(s, sversion, 0, &al);
-    if (errorcode != 0) {
-        SSLerr(SSL_F_TLS_PROCESS_HELLO_RETRY_REQUEST, errorcode);
-        goto f_err;
-    }
 
     if (!PACKET_get_bytes(pkt, &cipherchars, TLS_CIPHER_LEN)) {
         SSLerr(SSL_F_TLS_PROCESS_HELLO_RETRY_REQUEST, SSL_R_LENGTH_MISMATCH);
@@ -1773,9 +1780,6 @@ MSG_PROCESS_RETURN tls_process_server_certificate(SSL *s, PACKET *pkt)
      */
     x = sk_X509_value(sk, 0);
     sk = NULL;
-    /*
-     * VRS 19990621: possible memory leak; sk=null ==> !sk_pop_free() @end
-     */
 
     pkey = X509_get0_pubkey(x);
 
@@ -2040,29 +2044,29 @@ static int tls_process_ske_ecdhe(SSL *s, PACKET *pkt, EVP_PKEY **pkey, int *al)
 {
 #ifndef OPENSSL_NO_EC
     PACKET encoded_pt;
-    const unsigned char *ecparams;
+    unsigned int curve_type, curve_id;
 
     /*
      * Extract elliptic curve parameters and the server's ephemeral ECDH
-     * public key. For now we only support named (not generic) curves and
+     * public key. We only support named (not generic) curves and
      * ECParameters in this case is just three bytes.
      */
-    if (!PACKET_get_bytes(pkt, &ecparams, 3)) {
+    if (!PACKET_get_1(pkt, &curve_type) || !PACKET_get_net_2(pkt, &curve_id)) {
         *al = SSL_AD_DECODE_ERROR;
         SSLerr(SSL_F_TLS_PROCESS_SKE_ECDHE, SSL_R_LENGTH_TOO_SHORT);
         return 0;
     }
     /*
-     * Check curve is one of our preferences, if not server has sent an
-     * invalid curve. ECParameters is 3 bytes.
+     * Check curve is named curve type and one of our preferences, if not
+     * server has sent an invalid curve.
      */
-    if (!tls1_check_curve(s, ecparams, 3)) {
+    if (curve_type != NAMED_CURVE_TYPE || !tls1_check_group_id(s, curve_id)) {
         *al = SSL_AD_ILLEGAL_PARAMETER;
         SSLerr(SSL_F_TLS_PROCESS_SKE_ECDHE, SSL_R_WRONG_CURVE);
         return 0;
     }
 
-    if ((s->s3->peer_tmp = ssl_generate_param_group(ecparams[2])) == NULL) {
+    if ((s->s3->peer_tmp = ssl_generate_param_group(curve_id)) == NULL) {
         *al = SSL_AD_INTERNAL_ERROR;
         SSLerr(SSL_F_TLS_PROCESS_SKE_ECDHE,
                SSL_R_UNABLE_TO_FIND_ECDH_PARAMETERS);
@@ -3477,7 +3481,7 @@ int ssl_cipher_list_to_bytes(SSL *s, STACK_OF(SSL_CIPHER) *sk, WPACKET *pkt)
     ssl_set_client_disabled(s);
 
     if (sk == NULL)
-        return (0);
+        return 0;
 
 #ifdef OPENSSL_MAX_TLS1_2_CIPHER_LENGTH
 # if OPENSSL_MAX_TLS1_2_CIPHER_LENGTH < 6

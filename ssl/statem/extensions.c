@@ -408,13 +408,23 @@ static int verify_extension(SSL *s, unsigned int context, unsigned int type,
  */
 int extension_is_relevant(SSL *s, unsigned int extctx, unsigned int thisctx)
 {
+    int is_tls13;
+
+    /*
+     * For HRR we haven't selected the version yet but we know it will be
+     * TLSv1.3
+     */
+    if ((thisctx & SSL_EXT_TLS1_3_HELLO_RETRY_REQUEST) != 0)
+        is_tls13 = 1;
+    else
+        is_tls13 = SSL_IS_TLS13(s);
+
     if ((SSL_IS_DTLS(s)
                 && (extctx & SSL_EXT_TLS_IMPLEMENTATION_ONLY) != 0)
             || (s->version == SSL3_VERSION
                     && (extctx & SSL_EXT_SSL3_ALLOWED) == 0)
-            || (SSL_IS_TLS13(s)
-                && (extctx & SSL_EXT_TLS1_2_AND_BELOW_ONLY) != 0)
-            || (!SSL_IS_TLS13(s) && (extctx & SSL_EXT_TLS1_3_ONLY) != 0)
+            || (is_tls13 && (extctx & SSL_EXT_TLS1_2_AND_BELOW_ONLY) != 0)
+            || (!is_tls13 && (extctx & SSL_EXT_TLS1_3_ONLY) != 0)
             || (s->hit && (extctx & SSL_EXT_IGNORE_ON_RESUMPTION) != 0))
         return 0;
 
@@ -824,6 +834,7 @@ static int final_server_name(SSL *s, unsigned int context, int sent,
 {
     int ret = SSL_TLSEXT_ERR_NOACK;
     int altmp = SSL_AD_UNRECOGNIZED_NAME;
+    int was_ticket = (SSL_get_options(s) & SSL_OP_NO_TICKET) == 0;
 
     if (s->ctx != NULL && s->ctx->ext.servername_cb != 0)
         ret = s->ctx->ext.servername_cb(s, &altmp,
@@ -832,6 +843,40 @@ static int final_server_name(SSL *s, unsigned int context, int sent,
              && s->session_ctx->ext.servername_cb != 0)
         ret = s->session_ctx->ext.servername_cb(s, &altmp,
                                        s->session_ctx->ext.servername_arg);
+
+    if (!sent) {
+        OPENSSL_free(s->session->ext.hostname);
+        s->session->ext.hostname = NULL;
+    }
+
+    /*
+     * If we're expecting to send a ticket, and tickets were previously enabled,
+     * and now tickets are disabled, then turn off expected ticket.
+     * Also, if this is not a resumption, create a new session ID
+     */
+    if (ret == SSL_TLSEXT_ERR_OK && s->ext.ticket_expected
+            && was_ticket && (SSL_get_options(s) & SSL_OP_NO_TICKET) != 0) {
+        s->ext.ticket_expected = 0;
+        if (!s->hit) {
+            SSL_SESSION* ss = SSL_get_session(s);
+
+            if (ss != NULL) {
+                OPENSSL_free(ss->ext.tick);
+                ss->ext.tick = NULL;
+                ss->ext.ticklen = 0;
+                ss->ext.tick_lifetime_hint = 0;
+                ss->ext.tick_age_add = 0;
+                ss->ext.tick_identity = 0;
+                if (!ssl_generate_session_id(s, ss)) {
+                    ret = SSL_TLSEXT_ERR_ALERT_FATAL;
+                    altmp = SSL_AD_INTERNAL_ERROR;
+                }
+            } else {
+                ret = SSL_TLSEXT_ERR_ALERT_FATAL;
+                altmp = SSL_AD_INTERNAL_ERROR;
+            }
+        }
+    }
 
     switch (ret) {
     case SSL_TLSEXT_ERR_ALERT_FATAL:
@@ -1137,25 +1182,25 @@ static int final_key_share(SSL *s, unsigned int context, int sent, int *al)
                 && (!s->hit
                     || (s->ext.psk_kex_mode & TLSEXT_KEX_MODE_FLAG_KE_DHE)
                        != 0)) {
-            const uint16_t *pcurves, *clntcurves;
-            size_t num_curves, clnt_num_curves, i;
+            const uint16_t *pgroups, *clntgroups;
+            size_t num_groups, clnt_num_groups, i;
             unsigned int group_id = 0;
 
             /* Check if a shared group exists */
 
             /* Get the clients list of supported groups. */
-            tls1_get_grouplist(s, 1, &clntcurves, &clnt_num_curves);
-            tls1_get_grouplist(s, 0, &pcurves, &num_curves);
+            tls1_get_peer_groups(s, &clntgroups, &clnt_num_groups);
+            tls1_get_supported_groups(s, &pgroups, &num_groups);
 
             /* Find the first group we allow that is also in client's list */
-            for (i = 0; i < num_curves; i++) {
-                group_id = pcurves[i];
+            for (i = 0; i < num_groups; i++) {
+                group_id = pgroups[i];
 
-                if (check_in_list(s, group_id, clntcurves, clnt_num_curves, 1))
+                if (check_in_list(s, group_id, clntgroups, clnt_num_groups, 1))
                     break;
             }
 
-            if (i < num_curves) {
+            if (i < num_groups) {
                 /* A shared group exists so send a HelloRetryRequest */
                 s->s3->group_id = group_id;
                 s->hello_retry_request = 1;

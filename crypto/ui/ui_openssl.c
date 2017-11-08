@@ -409,8 +409,8 @@ static int open_console(UI *ui)
 #  endif
 #  ifdef EINVAL
             /*
-             * Ariel Glenn ariel@columbia.edu reports that solaris can return
-             * EINVAL instead.  This should be ok
+             * Ariel Glenn reports that solaris can return EINVAL instead.
+             * This should be ok
              */
         if (errno == EINVAL)
             is_a_tty = 0;
@@ -687,7 +687,7 @@ static int noecho_fgets(char *buf, int size, FILE *tty)
         FlushConsoleInputBuffer(inh);
     }
 #  endif
-    return (strlen(buf));
+    return strlen(buf);
 }
 # endif
 

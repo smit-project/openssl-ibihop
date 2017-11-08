@@ -1572,6 +1572,16 @@
 #define NID_sendProxiedOwner            1030
 #define OBJ_sendProxiedOwner            OBJ_id_kp,26L
 
+#define SN_cmcCA                "cmcCA"
+#define LN_cmcCA                "CMC Certificate Authority"
+#define NID_cmcCA               1131
+#define OBJ_cmcCA               OBJ_id_kp,27L
+
+#define SN_cmcRA                "cmcRA"
+#define LN_cmcRA                "CMC Registration Authority"
+#define NID_cmcRA               1132
+#define OBJ_cmcRA               OBJ_id_kp,28L
+
 #define SN_id_it_caProtEncCert          "id-it-caProtEncCert"
 #define NID_id_it_caProtEncCert         298
 #define OBJ_id_it_caProtEncCert         OBJ_id_it,1L
@@ -4890,3 +4900,18 @@
 #define SN_siphash              "SipHash"
 #define LN_siphash              "siphash"
 #define NID_siphash             1062
+
+#define SN_ffdhe2048            "ffdhe2048"
+#define NID_ffdhe2048           1126
+
+#define SN_ffdhe3072            "ffdhe3072"
+#define NID_ffdhe3072           1127
+
+#define SN_ffdhe4096            "ffdhe4096"
+#define NID_ffdhe4096           1128
+
+#define SN_ffdhe6144            "ffdhe6144"
+#define NID_ffdhe6144           1129
+
+#define SN_ffdhe8192            "ffdhe8192"
+#define NID_ffdhe8192           1130

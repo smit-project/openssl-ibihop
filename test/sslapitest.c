@@ -1507,6 +1507,16 @@ static int setupearly_data_test(SSL_CTX **cctx, SSL_CTX **sctx, SSL **clientssl,
                                       NULL, NULL)))
         return 0;
 
+    /*
+     * For one of the run throughs (doesn't matter which one), we'll try sending
+     * some SNI data in the initial ClientHello. This will be ignored (because
+     * there is no SNI cb set up by the server), so it should not impact
+     * early_data.
+     */
+    if (idx == 1
+            && !TEST_true(SSL_set_tlsext_host_name(*clientssl, "localhost")))
+        return 0;
+
     if (idx == 2) {
         /* Create the PSK */
         const SSL_CIPHER *cipher = NULL;
@@ -1964,19 +1974,20 @@ static int hostname_cb(SSL *s, int *al, void *arg)
 
 static const char *servalpn;
 
-static int alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *outlen,
-                    const unsigned char *in, unsigned int inlen, void *arg)
+static int alpn_select_cb(SSL *ssl, const unsigned char **out,
+                          unsigned char *outlen, const unsigned char *in,
+                          unsigned int inlen, void *arg)
 {
-    unsigned int i, protlen = 0;
+    unsigned int protlen = 0;
     const unsigned char *prot;
 
-    for (i = 0, prot = in; i < inlen; i += protlen, prot += protlen) {
-        protlen = *(prot++);
-        if (inlen - i < protlen)
+    for (prot = in; prot < in + inlen; prot += protlen) {
+        protlen = *prot++;
+        if (in + inlen - prot < protlen)
             return SSL_TLSEXT_ERR_NOACK;
 
         if (protlen == strlen(servalpn)
-                && memcmp(prot, "goodalpn", protlen) == 0) {
+                && memcmp(prot, servalpn, protlen) == 0) {
             *out = prot;
             *outlen = protlen;
             return SSL_TLSEXT_ERR_OK;

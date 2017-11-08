@@ -215,6 +215,9 @@ static const SSL_CIPHER cipher_aliases[] = {
     {0, SSL_TXT_kDHE, NULL, 0, SSL_kDHE},
     {0, SSL_TXT_DH, NULL, 0, SSL_kDHE},
 
+	// Defined for IBIHOP
+	{0, SSL_TXT_IBIHOP, NULL, 0, SSL_IBIHOP},
+
     {0, SSL_TXT_kEECDH, NULL, 0, SSL_kECDHE},
     {0, SSL_TXT_kECDHE, NULL, 0, SSL_kECDHE},
     {0, SSL_TXT_ECDH, NULL, 0, SSL_kECDHE},
@@ -1332,6 +1335,8 @@ STACK_OF(SSL_CIPHER) *ssl_create_cipher_list(const SSL_METHOD *ssl_method, STACK
      * server has both certificates, and is using the DEFAULT, or a client
      * preference).
      */
+    //ssl_cipher_apply_rule(0, SSL_IBIHOP, 0, 0, 0, 0, 0, CIPHER_ADD,
+    //                          -1, &head, &tail);
     ssl_cipher_apply_rule(0, SSL_kECDHE, SSL_aECDSA, 0, 0, 0, 0, CIPHER_ADD,
                           -1, &head, &tail);
     ssl_cipher_apply_rule(0, SSL_kECDHE, 0, 0, 0, 0, 0, CIPHER_ADD, -1, &head,
@@ -1776,7 +1781,7 @@ SSL_COMP *ssl3_comp_find(STACK_OF(SSL_COMP) *sk, int n)
     int i, nn;
 
     if ((n == 0) || (sk == NULL))
-        return (NULL);
+        return NULL;
     nn = sk_SSL_COMP_num(sk);
     for (i = 0; i < nn; i++) {
         ctmp = sk_SSL_COMP_value(sk, i);

@@ -905,9 +905,9 @@ sub __test_file {
 
     my $e = pop || "";
     my $f = pop;
-    $f = catfile($directories{BLDTEST},@_,$f . $e);
-    $f = catfile($directories{SRCTEST},@_,$f) unless -f $f;
-    return $f;
+    my $out = catfile($directories{BLDTEST},@_,$f . $e);
+    $out = catfile($directories{SRCTEST},@_,$f) unless -f $out;
+    return $out;
 }
 
 sub __apps_file {
@@ -915,9 +915,9 @@ sub __apps_file {
 
     my $e = pop || "";
     my $f = pop;
-    $f = catfile($directories{BLDAPPS},@_,$f . $e);
-    $f = catfile($directories{SRCAPPS},@_,$f) unless -f $f;
-    return $f;
+    my $out = catfile($directories{BLDAPPS},@_,$f . $e);
+    $out = catfile($directories{SRCAPPS},@_,$f) unless -f $out;
+    return $out;
 }
 
 sub __fuzz_file {
@@ -925,9 +925,9 @@ sub __fuzz_file {
 
     my $e = pop || "";
     my $f = pop;
-    $f = catfile($directories{BLDFUZZ},@_,$f . $e);
-    $f = catfile($directories{SRCFUZZ},@_,$f) unless -f $f;
-    return $f;
+    my $out = catfile($directories{BLDFUZZ},@_,$f . $e);
+    $out = catfile($directories{SRCFUZZ},@_,$f) unless -f $out;
+    return $out;
 }
 
 sub __data_file {
@@ -1146,7 +1146,7 @@ L<Test::More>, L<Test::Harness>
 
 =head1 AUTHORS
 
-Richard Levitte E<lt>levitte@openssl.orgE<gt> with assitance and
+Richard Levitte E<lt>levitte@openssl.orgE<gt> with assistance and
 inspiration from Andy Polyakov E<lt>appro@openssl.org<gt>.
 
 =cut

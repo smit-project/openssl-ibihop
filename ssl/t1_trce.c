@@ -442,6 +442,7 @@ static const ssl_trace_tbl ssl_ciphers_tbl[] = {
     {0x1305, "TLS_AES_128_CCM_8_SHA256"},
     {0xFEFE, "SSL_RSA_FIPS_WITH_DES_CBC_SHA"},
     {0xFEFF, "SSL_RSA_FIPS_WITH_3DES_EDE_CBC_SHA"},
+	{0X00D1, "TLS_IBIHOP_WITH_AES_128_CBC_SHA256"},	/*defined for IBIHOP*/
 };
 
 /* Compression methods */

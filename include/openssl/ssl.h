@@ -40,6 +40,9 @@ extern "C" {
  * Version 0 - initial version
  * Version 1 - added the optional peer certificate
  */
+
+# define CIPHER_DEBUG
+
 # define SSL_SESSION_ASN1_VERSION 0x0001
 
 # define SSL_MAX_SSL_SESSION_ID_LENGTH           32
@@ -75,6 +78,10 @@ extern "C" {
 # define SSL_TXT_kECDHr          "kECDHr"
 # define SSL_TXT_kECDHe          "kECDHe"
 # define SSL_TXT_kECDH           "kECDH"
+
+// SELF-DEFINED
+# define SSL_TXT_IBIHOP			 "IBIHOP"
+
 # define SSL_TXT_kEECDH          "kEECDH"/* alias for kECDHE */
 # define SSL_TXT_kECDHE          "kECDHE"
 # define SSL_TXT_kPSK            "kPSK"
@@ -148,6 +155,7 @@ extern "C" {
 # define SSL_TXT_TLSV1_2         "TLSv1.2"
 
 # define SSL_TXT_ALL             "ALL"
+
 
 /*-
  * COMPLEMENTOF* definitions. These identifiers are used to (de-select)

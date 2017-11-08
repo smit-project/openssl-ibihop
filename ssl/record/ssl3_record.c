@@ -271,8 +271,14 @@ int ssl3_get_record(SSL *s)
                 thisrr->type = type;
                 thisrr->rec_version = version;
 
-                /* Lets check version. In TLSv1.3 we ignore this field */
+                /*
+                 * Lets check version. In TLSv1.3 we ignore this field. For the
+                 * ServerHello after an HRR we haven't actually selected TLSv1.3
+                 * yet, but we still treat it as TLSv1.3, so we must check for
+                 * that explicitly
+                 */
                 if (!s->first_packet && !SSL_IS_TLS13(s)
+                        && !s->hello_retry_request
                         && version != (unsigned int)s->version) {
                     SSLerr(SSL_F_SSL3_GET_RECORD, SSL_R_WRONG_VERSION_NUMBER);
                     if ((s->version & 0xFF00) == (version & 0xFF00)
@@ -752,13 +758,13 @@ int ssl3_do_compress(SSL *ssl, SSL3_RECORD *wr)
                             (int)(wr->length + SSL3_RT_MAX_COMPRESSED_OVERHEAD),
                             wr->input, (int)wr->length);
     if (i < 0)
-        return (0);
+        return 0;
     else
         wr->length = i;
 
     wr->input = wr->data;
 #endif
-    return (1);
+    return 1;
 }
 
 /*-
@@ -844,7 +850,7 @@ int ssl3_enc(SSL *s, SSL3_RECORD *inrecs, size_t n_recs, int sending)
         if ((bs != 1) && !sending)
             return ssl3_cbc_remove_padding(rec, bs, mac_size);
     }
-    return (1);
+    return 1;
 }
 
 #define MAX_PADDING 256
@@ -1703,12 +1709,12 @@ int dtls1_process_record(SSL *s, DTLS1_BITMAP *bitmap)
     /* Mark receipt of record. */
     dtls1_record_bitmap_update(s, bitmap);
 
-    return (1);
+    return 1;
 
  f_err:
     ssl3_send_alert(s, SSL3_AL_FATAL, al);
  err:
-    return (0);
+    return 0;
 }
 
 /*
@@ -1894,6 +1900,6 @@ int dtls1_get_record(SSL *s)
         goto again;             /* get another record */
     }
 
-    return (1);
+    return 1;
 
 }

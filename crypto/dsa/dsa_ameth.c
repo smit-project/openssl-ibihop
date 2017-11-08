@@ -175,6 +175,7 @@ static int dsa_priv_decode(EVP_PKEY *pkey, const PKCS8_PRIV_KEY_INFO *p8)
         goto dsaerr;
     }
 
+    BN_set_flags(dsa->priv_key, BN_FLG_CONSTTIME);
     if (!BN_mod_exp(dsa->pub_key, dsa->g, dsa->priv_key, dsa->p, ctx)) {
         DSAerr(DSA_F_DSA_PRIV_DECODE, DSA_R_BN_ERROR);
         goto dsaerr;
@@ -249,7 +250,7 @@ static int dsa_priv_encode(PKCS8_PRIV_KEY_INFO *p8, const EVP_PKEY *pkey)
 
 static int int_dsa_size(const EVP_PKEY *pkey)
 {
-    return (DSA_size(pkey->pkey.dsa));
+    return DSA_size(pkey->pkey.dsa);
 }
 
 static int dsa_bits(const EVP_PKEY *pkey)
@@ -364,7 +365,7 @@ static int do_dsa_print(BIO *bp, const DSA *x, int off, int ptype)
         goto err;
     ret = 1;
  err:
-    return (ret);
+    return ret;
 }
 
 static int dsa_param_decode(EVP_PKEY *pkey,

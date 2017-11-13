@@ -22,7 +22,7 @@
 #include <openssl/dh.h>
 #include <openssl/bn.h>
 #include <openssl/md5.h>
-
+#include <openssl/ossl_typ.h>
 #include "../../crypto/ec/ec_lcl.h"
 #include "../../crypto/include/internal/evp_int.h"
 
@@ -2677,6 +2677,9 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
     unsigned char *encodedPoint = NULL;
     size_t encodedlen = 0;
     int curve_id = 0;
+
+    unsigned char *my_bn = NULL;
+    int my_bn_len = 0;
 #endif
     const SIGALG_LOOKUP *lu = s->s3->tmp.sigalg;
     int al = SSL_AD_INTERNAL_ERROR, i;
@@ -2827,6 +2830,15 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
         printf("Setting keys to prover and verifier...\n");
         params_a->sk = EC_KEY_get0_private_key(params_a->key);
 
+        // TEST BIGNUM convertion to bytes
+        int num_bytes = BN_num_bytes(params_a->sk);
+        my_bn = malloc((num_bytes) * sizeof(char));
+        my_bn_len = BN_bn2bin(params_a->sk, my_bn);
+        BIGNUM *p = BN_bin2bn(my_bn, my_bn_len, NULL);
+        printf("P: %d\n\n", BN_cmp(params_a->sk, p));
+        printf("Result is %s\n", BN_bn2dec(p));
+        // END TEST
+
         printf("Setting other system parameters...\n");
         params_a->group = EC_KEY_get0_group(params_a->key);	// set EC group information.
 
@@ -2963,10 +2975,12 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
          * [1 byte length of encoded point], followed by the actual encoded
          * point itself
          */
+    	// u8 means encodedLen is in num of 8bits
         if (!WPACKET_put_bytes_u8(pkt, NAMED_CURVE_TYPE)
                 || !WPACKET_put_bytes_u8(pkt, 0)
                 || !WPACKET_put_bytes_u8(pkt, curve_id)
-                || !WPACKET_sub_memcpy_u8(pkt, encodedPoint, encodedlen)) {
+                || !WPACKET_sub_memcpy_u8(pkt, encodedPoint, encodedlen)
+				|| !WPACKET_sub_memcpy_u8(pkt, my_bn, my_bn_len)) {
             SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE,
                    ERR_R_INTERNAL_ERROR);
             goto f_err;

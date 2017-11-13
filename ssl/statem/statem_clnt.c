@@ -2484,6 +2484,10 @@ static int tls_process_ske_ecdhe(SSL *s, PACKET *pkt, EVP_PKEY **pkey, int *al)
         return 0;
     }
 
+    printf("curve_id: %d", curve_id);
+    // Hardcoded for now
+    curve_id = 23;
+
     if ((s->s3->peer_tmp = ssl_generate_param_group(curve_id)) == NULL) {
         *al = SSL_AD_INTERNAL_ERROR;
         SSLerr(SSL_F_TLS_PROCESS_SKE_ECDHE,
@@ -2496,6 +2500,17 @@ static int tls_process_ske_ecdhe(SSL *s, PACKET *pkt, EVP_PKEY **pkey, int *al)
         SSLerr(SSL_F_TLS_PROCESS_SKE_ECDHE, SSL_R_LENGTH_MISMATCH);
         return 0;
     }
+
+    // START test reading bignum from server //
+
+    PACKET my_bn_pkt;
+    PACKET_get_length_prefixed_1(pkt, &my_bn_pkt);
+    unsigned char *my_bn = PACKET_data(&my_bn_pkt);
+    size_t my_bn_len = PACKET_remaining(&my_bn_pkt);
+    BIGNUM *p = BN_bin2bn(my_bn, my_bn_len, NULL);
+    printf("Result is %s\n", BN_bn2dec(p));
+
+    // END test /////
 
     if (!EVP_PKEY_set1_tls_encodedpoint(s->s3->peer_tmp,
                                         PACKET_data(&encoded_pt),
@@ -2556,8 +2571,9 @@ MSG_PROCESS_RETURN tls_process_key_exchange(SSL *s, PACKET *pkt)
         if (!tls_process_ske_dhe(s, pkt, &pkey, &al))
             goto err;
     } else if (alg_k & (SSL_kECDHE | SSL_kECDHEPSK)) {
-        if (!tls_process_ske_ecdhe(s, pkt, &pkey, &al))
-            goto err;
+        if (!tls_process_ske_ecdhe(s, pkt, &pkey, &al)) {
+        	goto err;
+        }
     } else if (alg_k) {
         al = SSL_AD_UNEXPECTED_MESSAGE;
         SSLerr(SSL_F_TLS_PROCESS_KEY_EXCHANGE, SSL_R_UNEXPECTED_MESSAGE);
@@ -2566,6 +2582,7 @@ MSG_PROCESS_RETURN tls_process_key_exchange(SSL *s, PACKET *pkt)
 
     /* if it was signed, check the signature */
     if (pkey != NULL) {
+
         PACKET params;
         int maxsig;
         const EVP_MD *md = NULL;
@@ -2659,6 +2676,7 @@ MSG_PROCESS_RETURN tls_process_key_exchange(SSL *s, PACKET *pkt)
                 goto err;
             }
         }
+
         tbslen = construct_key_exchange_tbs(s, &tbs, PACKET_data(&params),
                                             PACKET_remaining(&params));
         if (tbslen == 0) {
@@ -2678,6 +2696,7 @@ MSG_PROCESS_RETURN tls_process_key_exchange(SSL *s, PACKET *pkt)
         EVP_MD_CTX_free(md_ctx);
         md_ctx = NULL;
     } else {
+
         /* aNULL, aSRP or PSK do not need public keys */
         if (!(s->s3->tmp.new_cipher->algorithm_auth & (SSL_aNULL | SSL_aSRP))
             && !(alg_k & SSL_PSK)) {
@@ -3328,7 +3347,7 @@ static int tls_construct_cke_ecdhe(SSL *s, WPACKET *pkt, int *al)
 
        // generate public and private key pairs.
        printf("Generating keys of prover and verifier...\n");
-       params_b->key = ibihop_keygen1(skey->pkey.ec->group->curve_name);
+       params_b->key = EC_KEY_new_by_curve_name(skey->pkey.ec->group->curve_name);//ibihop_keygen1(skey->pkey.ec->group->curve_name);
 
        // set keys to verifier and prover.
        printf("Setting keys to prover and verifier...\n");

@@ -41,7 +41,7 @@ extern "C" {
  * Version 1 - added the optional peer certificate
  */
 
-# define CIPHER_DEBUG
+//# define CIPHER_DEBUG
 
 # define SSL_SESSION_ASN1_VERSION 0x0001
 

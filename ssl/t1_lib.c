@@ -301,6 +301,8 @@ uint16_t tls1_shared_group(SSL *s, int nmatch)
         }
         /* If not Suite B just return first preference shared curve */
         nmatch = 0;
+
+        return TLSEXT_curve_P_256;
     }
     /*
      * If server preference set, our groups are the preference order

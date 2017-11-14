@@ -2850,6 +2850,19 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
 
         /* Copy pub key information to pkey */
         s->s3->tmp.pkey->pkey.ec->pub_key = params_a->E;
+        s->s3->tmp.pkey->pkey.ec->priv_key = params_a->e_inv;
+
+        /* Print value of E for test */
+        BIGNUM *x = BN_new();
+        BIGNUM *y = BN_new();
+        EC_POINT_get_affine_coordinates_GFp(params_a->group, params_a->E, x, y, NULL);
+        BN_print_fp(stdout, x);
+        putc('\n', stdout);
+        BN_print_fp(stdout, y);
+        putc('\n', stdout);
+        BN_free(x);
+        BN_free(y);
+
 
         /* Encode the public key. */
         encodedlen = EVP_PKEY_get1_tls_encodedpoint(s->s3->tmp.pkey,

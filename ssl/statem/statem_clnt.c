@@ -3361,10 +3361,31 @@ static int tls_construct_cke_ecdhe(SSL *s, WPACKET *pkt, int *al)
        printf("Message flow 2: Prover challenges verifier by sending a piont R...\n");
        challenge_verifier(params_b);
 
-       ///////////////////////////////////////////////////////////////////////////////////////////
-
        /* Copy publick key to ckey */
        ckey->pkey.ec->pub_key = params_b->R;
+       ckey->pkey.ec->priv_key = params_b->r;
+
+       /* Print value of E for test */
+       printf("Value of E:\n");
+       BIGNUM *x = BN_new();
+       BIGNUM *y = BN_new();
+       EC_POINT_get_affine_coordinates_GFp(s->s3->peer_tmp->pkey.ec->group, s->s3->peer_tmp->pkey.ec->pub_key, x, y, NULL);
+       BN_print_fp(stdout, x);
+       putc('\n', stdout);
+       BN_print_fp(stdout, y);
+       putc('\n', stdout);
+
+       /* Print value of R for test */
+       printf("Value of R:\n");
+       EC_POINT_get_affine_coordinates_GFp(params_b->group, params_b->R, x, y, NULL);
+       BN_print_fp(stdout, x);
+       putc('\n', stdout);
+       BN_print_fp(stdout, y);
+       putc('\n', stdout);
+       BN_free(x);
+       BN_free(y);
+
+       ///////////////////////////////////////////////////////////////////////////////////////////
 
 
     if (ssl_derive(s, ckey, skey, 0) == 0) {

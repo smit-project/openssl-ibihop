@@ -3466,7 +3466,6 @@ static int tls_process_cke_ecdhe(SSL *s, PACKET *pkt, int *al)
         const unsigned char *data;
         const unsigned char *my_flag;
 
-
         /*
          * Get client's public key from encoded point in the
          * ClientKeyExchange message.

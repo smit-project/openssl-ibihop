@@ -4703,7 +4703,7 @@ int ssl_derive(SSL *s, EVP_PKEY *privkey, EVP_PKEY *pubkey, int gensecret)
     if (EVP_PKEY_derive(pctx, pms, &pmslen) <= 0)
         goto err;
 
-    if (gensecret) {
+    if (gensecret) { // ND
         if (SSL_IS_TLS13(s)) {
             /*
              * If we are resuming then we already generated the early secret
@@ -4717,7 +4717,7 @@ int ssl_derive(SSL *s, EVP_PKEY *privkey, EVP_PKEY *pubkey, int gensecret)
                 rv = 1;
 
             rv = rv && tls13_generate_handshake_secret(s, pms, pmslen);
-        } else {
+        } else { //ND
             rv = ssl_generate_master_secret(s, pms, pmslen, 0);
         }
     } else {

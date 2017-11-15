@@ -1171,6 +1171,13 @@ struct ssl_st {
     /* Up to how many pipelines should we use? If 0 then 1 is assumed */
     size_t max_pipelines;
 
+//    struct {
+//    	/* Built-in IBIHOP flags */
+//    	/* IBIHOP protocol round flag */
+//    	/* 1 - first round, 2 - second round */
+//    	BIGNUM *exch_rd;
+//    };
+
     struct {
         /* Built-in extension flags */
         uint8_t extflags[TLSEXT_IDX_num_builtins];

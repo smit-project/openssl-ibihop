@@ -2831,12 +2831,16 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
         params_a->sk = EC_KEY_get0_private_key(params_a->key);
 
         // TEST BIGNUM convertion to bytes
-        int num_bytes = BN_num_bytes(params_a->sk);
+        BIGNUM *flag = BN_new();
+        BN_dec2bn(&flag, "1");
+        printf("dec2bn okay.\n");
+        int num_bytes = BN_num_bytes(flag);
         my_bn = malloc((num_bytes) * sizeof(char));
-        my_bn_len = BN_bn2bin(params_a->sk, my_bn);
+        my_bn_len = BN_bn2bin(flag, my_bn);
         BIGNUM *p = BN_bin2bn(my_bn, my_bn_len, NULL);
-        printf("P: %d\n\n", BN_cmp(params_a->sk, p));
+        printf("P: %d\n\n", BN_cmp(flag, p));
         printf("Result is %s\n", BN_bn2dec(p));
+//        BN_free(flag);
         // END TEST
 
         printf("Setting other system parameters...\n");
@@ -3458,7 +3462,10 @@ static int tls_process_cke_ecdhe(SSL *s, PACKET *pkt, int *al)
         goto err;
     } else {
         unsigned int i;
+        unsigned int j;
         const unsigned char *data;
+        const unsigned char *my_flag;
+
 
         /*
          * Get client's public key from encoded point in the
@@ -3467,11 +3474,13 @@ static int tls_process_cke_ecdhe(SSL *s, PACKET *pkt, int *al)
 
         /* Get encoded point length */
         if (!PACKET_get_1(pkt, &i) || !PACKET_get_bytes(pkt, &data, i)
-            || PACKET_remaining(pkt) != 0) {
+        		|| !PACKET_get_1(pkt, &j) || !PACKET_get_bytes(pkt, &my_flag, j)
+				|| PACKET_remaining(pkt) != 0) {
             *al = SSL_AD_DECODE_ERROR;
             SSLerr(SSL_F_TLS_PROCESS_CKE_ECDHE, SSL_R_LENGTH_MISMATCH);
             goto err;
         }
+        printf("the flag is: %s.\n", my_flag);
         ckey = EVP_PKEY_new();
         if (ckey == NULL || EVP_PKEY_copy_parameters(ckey, skey) <= 0) {
             SSLerr(SSL_F_TLS_PROCESS_CKE_ECDHE, ERR_R_EVP_LIB);

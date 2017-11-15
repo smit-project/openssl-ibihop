@@ -2510,6 +2510,14 @@ static int tls_process_ske_ecdhe(SSL *s, PACKET *pkt, EVP_PKEY **pkey, int *al)
     BIGNUM *p = BN_bin2bn(my_bn, my_bn_len, NULL);
     printf("Result is %s\n", BN_bn2dec(p));
 
+    /* test the flag receiving on client. */
+    if (!strcmp(BN_bn2dec(p), "1"))
+    	printf("do round 1 on client.\n");
+    else if (!strcmp(BN_bn2dec(p), "2"))
+    	printf("do round 2 on client. \n");
+    else
+    	printf("default.\n");
+
     // END test /////
 
     if (!EVP_PKEY_set1_tls_encodedpoint(s->s3->peer_tmp,
@@ -3385,6 +3393,11 @@ static int tls_construct_cke_ecdhe(SSL *s, WPACKET *pkt, int *al)
        BN_free(x);
        BN_free(y);
 
+       unsigned char *my_bn;
+       size_t my_bn_len;
+       BIGNUM *flag = BN_new();
+       BN_dec2bn(&flag, "2");
+       my_bn_len = BN_bn2bin(flag, my_bn);
        ///////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -3401,7 +3414,8 @@ static int tls_construct_cke_ecdhe(SSL *s, WPACKET *pkt, int *al)
         goto err;
     }
 
-    if (!WPACKET_sub_memcpy_u8(pkt, encodedPoint, encoded_pt_len)) {
+    if (!WPACKET_sub_memcpy_u8(pkt, encodedPoint, encoded_pt_len)
+    		|| !WPACKET_sub_memcpy_u8(pkt, my_bn, my_bn_len)) {
         SSLerr(SSL_F_TLS_CONSTRUCT_CKE_ECDHE, ERR_R_INTERNAL_ERROR);
         goto err;
     }

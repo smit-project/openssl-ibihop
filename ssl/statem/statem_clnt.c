@@ -933,10 +933,16 @@ WRITE_TRAN ossl_statem_client_write_transition(SSL *s)
         return WRITE_TRAN_CONTINUE;
 
     case TLS_ST_CW_CERT:
+    	printf("State BEFORE TLS_ST_CW_KEY_EXCH: TLS_ST_CW_CERT\n\n\n");
         st->hand_state = TLS_ST_CW_KEY_EXCH;
         return WRITE_TRAN_CONTINUE;
 
     case TLS_ST_CW_KEY_EXCH:
+
+    	// FIXME
+    	// Check flag here to repeat
+    	// if(flag) st->hand_state = TLS_ST_CW_KEY_EXCH;
+
         /*
          * For TLS, cert_req is set to 2, so a cert chain of nothing is
          * sent, but no verify packet is sent
@@ -947,6 +953,8 @@ WRITE_TRAN ossl_statem_client_write_transition(SSL *s)
          * need to skip the certificate verify message when client's
          * ECDH public key is sent inside the client certificate.
          */
+
+
         if (s->s3->tmp.cert_req == 1) {
             st->hand_state = TLS_ST_CW_CERT_VRFY;
         } else {
@@ -1236,13 +1244,16 @@ int ossl_statem_client_construct_message(SSL *s, WPACKET *pkt,
         break;
 
     case TLS_ST_CW_CERT:
+    	printf("++++ tls_construct_client_certificate\n\n\n");
         *confunc = tls_construct_client_certificate;
         *mt = SSL3_MT_CERTIFICATE;
         break;
 
     case TLS_ST_CW_KEY_EXCH:
+    	printf("++++ tls_construct_client_key_exchange\n\n\n");
         *confunc = tls_construct_client_key_exchange;
         *mt = SSL3_MT_CLIENT_KEY_EXCHANGE;
+        //*mt = SSL3_MT_CERTIFICATE;
         break;
 
     case TLS_ST_CW_CERT_VRFY:

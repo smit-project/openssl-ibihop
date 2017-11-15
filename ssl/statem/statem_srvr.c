@@ -641,6 +641,12 @@ int ossl_statem_server_read_transition(SSL *s, int mt)
         break;
 
     case TLS_ST_SR_KEY_EXCH:
+    	// ME:
+//    	if (1 == 1) {
+//			st->hand_state = TLS_ST_SR_KEY_EXCH;
+//			return 1;
+//		}
+    	// END ME
         /*
          * We should only process a CertificateVerify message if we have
          * received a Certificate from the client. If so then |s->session->peer|
@@ -990,6 +996,15 @@ WRITE_TRAN ossl_statem_server_write_transition(SSL *s)
         /* Fall through */
 
     case TLS_ST_SW_KEY_EXCH:
+    	// FIXME : repeat key exchange.
+    	// Check the flag to decide pass1 or 2 here
+    	// if pass 1, then repeat the state.
+    	if (send_server_key_exchange(s)) {
+			st->hand_state = TLS_ST_SW_KEY_EXCH;
+			return WRITE_TRAN_CONTINUE;
+		}
+    	// END
+
         if (send_certificate_request(s)) {
             st->hand_state = TLS_ST_SW_CERT_REQ;
             return WRITE_TRAN_CONTINUE;
@@ -2776,6 +2791,7 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
 #ifndef OPENSSL_NO_EC
     if (type & (SSL_kECDHE | SSL_kECDHEPSK)) {
 
+    	// Second time called, this is not null for second pass
         if (s->s3->tmp.pkey != NULL) {
             SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE,
                    ERR_R_INTERNAL_ERROR);
@@ -3459,7 +3475,7 @@ static int tls_process_cke_ecdhe(SSL *s, PACKET *pkt, int *al)
     } else {
         unsigned int i;
         const unsigned char *data;
-
+        // ND
         /*
          * Get client's public key from encoded point in the
          * ClientKeyExchange message.

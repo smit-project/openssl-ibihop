@@ -2816,7 +2816,7 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
         //  //eccgrp = OBJ_txt2nid(curve);
         key = EC_KEY_new_by_curve_name(ginf->nid);
         if (s->s3->tmp.pkey->pkey.ec->group == NULL)
-        	printf("err.\n");
+        	printf("err on ssl object.\n");
         EC_KEY *tmp_ec_key = s->s3->tmp.pkey->pkey.ec;
         params_a->order = s->s3->tmp.pkey->pkey.ec->group->order;
         //

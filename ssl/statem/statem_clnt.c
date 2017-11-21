@@ -87,20 +87,45 @@ void* initialize()
 	EC_KEY *key - a random public and private key.
 	NULL - key generation failed.
 ***/
-EC_KEY* ibihop_keygen1(char *curve)
+EC_KEY* ibihop_keygen(uint16_t id, EVP_PKEY_CTX *pctx)
 {
-  EC_KEY *key = NULL;
-  int eccgrp;
-  eccgrp = OBJ_txt2nid(curve);
-  key = EC_KEY_new_by_curve_name(eccgrp);
+    //EVP_PKEY_CTX *pctx = NULL;
+    EVP_PKEY *pkey = NULL;
+    const TLS_GROUP_INFO *ginf = tls1_group_id_lookup(id);
+    uint16_t gtype;
 
-  if (!(EC_KEY_generate_key(key)))
-  {
-    printf("Error in EC_KEY_generate_key.");
-	return NULL;
-  }
+    if (ginf == NULL)
+        goto err;
+    gtype = ginf->flags & TLS_CURVE_TYPE;
+    if (gtype == TLS_CURVE_CUSTOM)
+        pctx = EVP_PKEY_CTX_new_id(ginf->nid, NULL);
+    else
+        pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
+    if (pctx == NULL)
+        goto err;
+    if (EVP_PKEY_keygen_init(pctx) <= 0)
+        goto err;
+    if (gtype != TLS_CURVE_CUSTOM
+            && EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, ginf->nid) <= 0)
+        goto err;
+    if (EVP_PKEY_keygen(pctx, &pkey) <= 0) {
+        EVP_PKEY_free(pkey);
+        pkey = NULL;
+    }
 
-  return key;
+ err:
+    EVP_PKEY_CTX_free(pctx);
+    return pkey;
+//  EC_KEY *key = NULL;
+//  //const TLS_GROUP_INFO *ginf = tls1_group_id_lookup(curve_id);
+//  //int eccgrp;
+//  //eccgrp = OBJ_txt2nid(curve);
+//  key = EC_KEY_new_by_curve_name(curve_id);
+//
+//  if (!(EC_KEY_generate_key(key)))
+//    return NULL;
+//
+//  return key;
 }
 
 /***
@@ -114,26 +139,26 @@ EC_KEY* ibihop_keygen1(char *curve)
 	1 - EC group information is not given (NULL).
 	2 - message generation failed.
 ***/
-//int challenge_prover(PARA_VER *params)
-//{
-//  if (params->group != NULL)
-//    params->E = EC_POINT_new(params->group);
-//  else
-//    return 1;
-//  EC_GROUP_get_order(params->group, params->order, NULL);
-//  BN_rand_range(params->e, params->order);
-//
-//  BN_CTX *ctx = BN_CTX_new();
-//  BN_mod_inverse(params->e_inv, params->e, params->order, ctx);
-//
-//  // calculate E = e_invP
-//  if (!EC_POINT_mul(params->group, params->E, params->e_inv, NULL, NULL, ctx))
-//    return 2;
-//
-//  BN_CTX_free(ctx);
-//
-//  return 0;
-//}
+int challenge_prover(PARA_VER *params)
+{
+  if (params->group != NULL)
+    params->E = EC_POINT_new(params->group);
+  else
+    return 1;
+  EC_GROUP_get_order(params->group, params->order, NULL);
+  BN_rand_range(params->e, params->order);
+
+  BN_CTX *ctx = BN_CTX_new();
+  BN_mod_inverse(params->e_inv, params->e, params->order, ctx);
+
+  // calculate E = e_invP
+  if (!EC_POINT_mul(params->group, params->E, params->e_inv, NULL, NULL, ctx))
+    return 2;
+
+  BN_CTX_free(ctx);
+
+  return 0;
+}
 
 /***
   This function generates a challenge for verifier. The output is supposed to be used in Message 2 of IBIHOP.
@@ -146,24 +171,24 @@ EC_KEY* ibihop_keygen1(char *curve)
 	1 - EC group information is not given (NULL).
 	2 - message generation failed.
 ***/
-int challenge_verifier(PARA_PRO *params)
-{
-  if (params->group != NULL)
-    params->R = EC_POINT_new(params->group);
-  else
-    return 1;
-  EC_GROUP_get_order(params->group, params->order, NULL);
-  BN_rand_range(params->r, params->order);
-
-  BN_CTX *ctx = BN_CTX_new();
-
-  if (!EC_POINT_mul(params->group, params->R, params->r, NULL, NULL, ctx))
-    return 2;
-
-  BN_CTX_free(ctx);
-
-  return 0;
-}
+//int challenge_verifier(PARA_PRO *params)
+//{
+//  if (params->group != NULL)
+//    params->R = EC_POINT_new(params->group);
+//  else
+//    return 1;
+//  EC_GROUP_get_order(params->group, params->order, NULL);
+//  BN_rand_range(params->r, params->order);
+//
+//  BN_CTX *ctx = BN_CTX_new();
+//
+//  if (!EC_POINT_mul(params->group, params->R, params->r, NULL, NULL, ctx))
+//    return 2;
+//
+//  BN_CTX_free(ctx);
+//
+//  return 0;
+//}
 
 /***
   This function generates a response to verifier's challenge. The output is supposed to be used in Message 3 of IBIHOP.
@@ -176,36 +201,36 @@ int challenge_verifier(PARA_PRO *params)
 	0 - the challenge message is generated successfully.
 	1 - EC group information is not given (NULL).
 ***/
-//int respond_prover(PARA_VER *params, EC_POINT *R)
-//{
-//  if (params->group == NULL)
-//    return 1;
-//
-//  BIGNUM *tmp = BN_new();
-//  BIGNUM *x = BN_new();
-//  BIGNUM *y = BN_new();
-//  EC_POINT *ret = EC_POINT_new(params->group);
-//  EC_POINT *yR = EC_POINT_new(params->group);
-//  BN_CTX *ctx = BN_CTX_new();
-//
-//  // calculate [yR]_x
-//  EC_POINT_mul(params->group, yR, NULL, R, params->sk, ctx);
-//  EC_POINT_get_affine_coordinates_GFp(params->group, yR, x, y, ctx);
-//
-//  // calculate [([yR]_x)P]_x
-//  EC_POINT_mul(params->group, ret, x, NULL, NULL, ctx);
-//  EC_POINT_get_affine_coordinates_GFp(params->group, ret, x, y, ctx);
-//  BN_mod_add(params->f, x, params->e, params->order, ctx);
-//
-//  BN_free(tmp);
-//  BN_free(x);
-//  BN_free(y);
-//  BN_CTX_free(ctx);
-//  EC_POINT_free(ret);
-//  EC_POINT_free(yR);
-//
-//  return 0;
-//}
+int respond_prover(PARA_VER *params, EC_POINT *R)
+{
+  if (params->group == NULL)
+    return 1;
+
+  BIGNUM *tmp = BN_new();
+  BIGNUM *x = BN_new();
+  BIGNUM *y = BN_new();
+  EC_POINT *ret = EC_POINT_new(params->group);
+  EC_POINT *yR = EC_POINT_new(params->group);
+  BN_CTX *ctx = BN_CTX_new();
+
+  // calculate [yR]_x
+  EC_POINT_mul(params->group, yR, NULL, R, params->sk, ctx);
+  EC_POINT_get_affine_coordinates_GFp(params->group, yR, x, y, ctx);
+
+  // calculate [([yR]_x)P]_x
+  EC_POINT_mul(params->group, ret, x, NULL, NULL, ctx);
+  EC_POINT_get_affine_coordinates_GFp(params->group, ret, x, y, ctx);
+  BN_mod_add(params->f, x, params->e, params->order, ctx);
+
+  BN_free(tmp);
+  BN_free(x);
+  BN_free(y);
+  BN_CTX_free(ctx);
+  EC_POINT_free(ret);
+  EC_POINT_free(yR);
+
+  return 0;
+}
 
 /***
   This function generates a response to prover's challenge. The output is supposed to be used in Message 4 of IBIHOP.
@@ -220,49 +245,49 @@ int challenge_verifier(PARA_PRO *params)
 	1 - EC group information is not given (NULL).
 	2 - verification of verifier's response failed.
 ***/
-int respond_verifier(PARA_PRO *params, EC_POINT *E, BIGNUM *f)
-{
-  if (params->group == NULL)
-    return 1;
-
-  BIGNUM *tmp = BN_new();
-  BIGNUM *x = BN_new();
-  BIGNUM *y = BN_new();
-  BIGNUM *e_prime = BN_new();
-  BN_CTX *ctx = BN_CTX_new();
-  EC_POINT *ret = EC_POINT_new(params->group);
-  const EC_POINT *generator = EC_POINT_new(params->group);
-  EC_POINT *rY = EC_POINT_new(params->group);
-
-  // calculate [rY]_x
-  EC_POINT_mul(params->group, rY, NULL, params->vpk, params->r, ctx);
-  EC_POINT_get_affine_coordinates_GFp(params->group, rY, x, y, ctx);
-
-  // calculate [([rY]_x)P]_x
-  EC_POINT_mul(params->group, ret, x, NULL, NULL, ctx);
-  EC_POINT_get_affine_coordinates_GFp(params->group, ret, x, y, ctx);
-
-  BN_mod_sub(e_prime, f, x, params->order, ctx);
-
-  EC_POINT_mul(params->group, ret, NULL, E, e_prime, ctx);
-  generator = EC_GROUP_get0_generator(params->group);
-  if (EC_POINT_cmp(params->group, ret, generator, ctx) != 0)
-    return 2;	// verification failed.
-
-  BN_mod_mul(tmp, e_prime, params->sk, params->order, ctx);
-  BN_mod_add(params->s, tmp, params->r, params->order, ctx);
-
-  BN_free(tmp);
-  BN_free(x);
-  BN_free(y);
-  BN_free(e_prime);
-  BN_CTX_free(ctx);
-  EC_POINT_free(ret);
-  //EC_POINT_free(generator);
-  EC_POINT_free(rY);
-
-  return 0;
-}
+//int respond_verifier(PARA_PRO *params, EC_POINT *E, BIGNUM *f)
+//{
+//  if (params->group == NULL)
+//    return 1;
+//
+//  BIGNUM *tmp = BN_new();
+//  BIGNUM *x = BN_new();
+//  BIGNUM *y = BN_new();
+//  BIGNUM *e_prime = BN_new();
+//  BN_CTX *ctx = BN_CTX_new();
+//  EC_POINT *ret = EC_POINT_new(params->group);
+//  const EC_POINT *generator = EC_POINT_new(params->group);
+//  EC_POINT *rY = EC_POINT_new(params->group);
+//
+//  // calculate [rY]_x
+//  EC_POINT_mul(params->group, rY, NULL, params->vpk, params->r, ctx);
+//  EC_POINT_get_affine_coordinates_GFp(params->group, rY, x, y, ctx);
+//
+//  // calculate [([rY]_x)P]_x
+//  EC_POINT_mul(params->group, ret, x, NULL, NULL, ctx);
+//  EC_POINT_get_affine_coordinates_GFp(params->group, ret, x, y, ctx);
+//
+//  BN_mod_sub(e_prime, f, x, params->order, ctx);
+//
+//  EC_POINT_mul(params->group, ret, NULL, E, e_prime, ctx);
+//  generator = EC_GROUP_get0_generator(params->group);
+//  if (EC_POINT_cmp(params->group, ret, generator, ctx) != 0)
+//    return 2;	// verification failed.
+//
+//  BN_mod_mul(tmp, e_prime, params->sk, params->order, ctx);
+//  BN_mod_add(params->s, tmp, params->r, params->order, ctx);
+//
+//  BN_free(tmp);
+//  BN_free(x);
+//  BN_free(y);
+//  BN_free(e_prime);
+//  BN_CTX_free(ctx);
+//  EC_POINT_free(ret);
+//  //EC_POINT_free(generator);
+//  EC_POINT_free(rY);
+//
+//  return 0;
+//}
 
 /***
   This function checks the validity of prover and return 0 if the prover is valid.
@@ -277,34 +302,34 @@ int respond_verifier(PARA_PRO *params, EC_POINT *E, BIGNUM *f)
 	1 - EC group information is not given (NULL).
 	2 - prover verification failed.
 ***/
-//int check_validity(PARA_VER *params, EC_POINT *R, BIGNUM *s)
-//{
-//  if (params->group == NULL)
-//    return 1;
-//
-//  EC_POINT *sP = EC_POINT_new(params->group);
-//  EC_POINT *negR = EC_POINT_new(params->group);
-//  EC_POINT *ret = EC_POINT_new(params->group);
-//  EC_POINT *X = EC_POINT_new(params->group);
-//  BN_CTX *ctx = BN_CTX_new();
-//
-//  EC_POINT_mul(params->group, sP, s, NULL, NULL, ctx);
-//  EC_POINT_copy(negR, R);
-//  EC_POINT_invert(params->group, negR, ctx);
-//  EC_POINT_add(params->group, ret, sP, negR, ctx);
-//
-//  EC_POINT_mul(params->group, X, NULL, ret, params->e_inv, ctx);
-//  if (EC_POINT_cmp(params->group, X, params->ppk, ctx) != 0)
-//    return 2;	// verification failed.
-//
-//  EC_POINT_free(sP);
-//  EC_POINT_free(negR);
-//  EC_POINT_free(ret);
-//  EC_POINT_free(X);
-//  BN_CTX_free(ctx);
-//
-//  return 0;
-//}
+int check_validity(PARA_VER *params, EC_POINT *R, BIGNUM *s)
+{
+  if (params->group == NULL)
+    return 1;
+
+  EC_POINT *sP = EC_POINT_new(params->group);
+  EC_POINT *negR = EC_POINT_new(params->group);
+  EC_POINT *ret = EC_POINT_new(params->group);
+  EC_POINT *X = EC_POINT_new(params->group);
+  BN_CTX *ctx = BN_CTX_new();
+
+  EC_POINT_mul(params->group, sP, s, NULL, NULL, ctx);
+  EC_POINT_copy(negR, R);
+  EC_POINT_invert(params->group, negR, ctx);
+  EC_POINT_add(params->group, ret, sP, negR, ctx);
+
+  EC_POINT_mul(params->group, X, NULL, ret, params->e_inv, ctx);
+  if (EC_POINT_cmp(params->group, X, params->ppk, ctx) != 0)
+    return 2;	// verification failed.
+
+  EC_POINT_free(sP);
+  EC_POINT_free(negR);
+  EC_POINT_free(ret);
+  EC_POINT_free(X);
+  BN_CTX_free(ctx);
+
+  return 0;
+}
 
 /***
   This function initialize the structure pointer of PARA_VER.
@@ -312,7 +337,7 @@ int respond_verifier(PARA_PRO *params, EC_POINT *E, BIGNUM *f)
   Input:
   	params	- structure pointer of PARA_VER.
 ***/
-void PARA_VER_init1(PARA_VER *params)
+void PARA_VER_init(PARA_VER *params)
 {
   params->e = BN_new();
   params->e_inv = BN_new();
@@ -331,7 +356,7 @@ void PARA_VER_init1(PARA_VER *params)
   Input:
   	params	- structure pointer of PARA_VER.
 ***/
-void PARA_VER_free1(PARA_VER *params)
+void PARA_VER_free(PARA_VER *params)
 {
   //todo...add decision to check if object needs to free.
   BN_free(params->e);
@@ -346,7 +371,7 @@ void PARA_VER_free1(PARA_VER *params)
   Input:
   	params	- structure pointer of PARA_PRO.
 ***/
-int PARA_PRO_init1(PARA_PRO *params)
+int PARA_PRO_init(PARA_PRO *params)
 {
   params->r = BN_new();
   params->s = BN_new();
@@ -364,7 +389,7 @@ int PARA_PRO_init1(PARA_PRO *params)
   Input:
   	params	- structure pointer of PARA_PRO.
 ***/
-void PARA_PRO_free1(PARA_PRO *params)
+void PARA_PRO_free(PARA_PRO *params)
 {
   //todo...add decision to check if object needs to free.
   BN_free(params->r);
@@ -1574,6 +1599,76 @@ int tls_construct_client_hello(SSL *s, WPACKET *pkt)
         SSLerr(SSL_F_TLS_CONSTRUCT_CLIENT_HELLO, ERR_R_INTERNAL_ERROR);
         return 0;
     }
+
+    /* IBIHOP pass 1 extension on client */
+    // hard code curve name - originally this should be negotiated and specified by server.
+    EVP_PKEY* dumy_evp_pkey;
+    EC_KEY *dumy_ec_key = NULL;
+    unsigned char *encodedPoint = NULL;
+    int curve_id = TLSEXT_curve_P_256;
+
+    /* Initial IBIHOP params */
+    PARA_VER *params_a;
+    params_a = (PARA_VER*) malloc(sizeof(PARA_VER));
+    PARA_VER_init(params_a);
+    dumy_evp_pkey = ssl_generate_pkey_group(curve_id);
+    dumy_ec_key = EVP_PKEY_get1_EC_KEY(dumy_evp_pkey);
+    // generate public and private key pairs.
+    printf("Generating keys of prover and verifier...\n");
+    params_a->order = dumy_evp_pkey->pkey.ec->group->order;
+            //
+            if (!(EC_KEY_generate_key(dumy_ec_key)))
+                return NULL;
+            //curve_name_id = EC_GROUP_get_curve_name(s->s3->tmp.pkey->pkey.ec->group);
+            EVP_PKEY_CTX *pctx = NULL;
+            params_a->key = dumy_ec_key;//ibihop_keygen(curve_id, pctx);
+
+            // set keys to verifier and prover.
+            printf("Setting keys to prover and verifier...\n");
+            params_a->sk = EC_KEY_get0_private_key(params_a->key);
+
+            // TEST BIGNUM convertion to bytes
+//            int num_bytes = BN_num_bytes(params_a->sk);
+//            my_bn = malloc((num_bytes) * sizeof(char));
+//            my_bn_len = BN_bn2bin(params_a->sk, my_bn);
+//            BIGNUM *p = BN_bin2bn(my_bn, my_bn_len, NULL);
+//            printf("P: %d\n\n", BN_cmp(params_a->sk, p));
+//            printf("Result is %s\n", BN_bn2dec(p));
+            // END TEST
+
+            printf("Setting other system parameters...\n");
+            params_a->group = EC_KEY_get0_group(params_a->key);	// set EC group information.
+
+            EC_GROUP_get_order(params_a->group, params_a->order, NULL);	// set order of group
+
+            /* Generate challenge to prover */
+            printf("Message flow 1: Verifier challenges prover by sending a point E...\n");
+            challenge_prover(params_a);
+
+            /* Copy pub key information to pkey */
+            dumy_evp_pkey->pkey.ec->pub_key = params_a->E;
+            dumy_evp_pkey->pkey.ec->priv_key = params_a->e_inv;
+
+            /* Print value of E for test */
+            BIGNUM *x = BN_new();
+            BIGNUM *y = BN_new();
+            EC_POINT_get_affine_coordinates_GFp(params_a->group, params_a->E, x, y, NULL);
+            BN_print_fp(stdout, x);
+            putc('\n', stdout);
+            BN_print_fp(stdout, y);
+            putc('\n', stdout);
+            BN_free(x);
+            BN_free(y);
+
+            /* Encode the public key. */
+            size_t encodedlen = EVP_PKEY_get1_tls_encodedpoint(dumy_evp_pkey,
+                                                        &encodedPoint);
+            if (!WPACKET_sub_memcpy_u8(pkt, encodedPoint, encodedlen)) {
+                        SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE,
+                               ERR_R_INTERNAL_ERROR);
+            }
+    /* End IBIHOP extension */
+
 
     return 1;
 }

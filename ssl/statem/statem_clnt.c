@@ -1662,32 +1662,38 @@ int tls_construct_client_hello(SSL *s, WPACKET *pkt)
 
 
             // IBIHOP: Writing encoded point
-            if (!WPACKET_start_sub_packet_u16(pkt)) {
-				SSLerr(SSL_F_TLS_CONSTRUCT_CLIENT_HELLO, ERR_R_INTERNAL_ERROR);
-				return 0;
-			}
-
-
+//            if (!WPACKET_start_sub_packet_u8(pkt)) {
+//				SSLerr(SSL_F_TLS_CONSTRUCT_CLIENT_HELLO, ERR_R_INTERNAL_ERROR);
+//				return 0;
+//			}
+//
+//            size_t encodedlen = EVP_PKEY_get1_tls_encodedpoint(dumy_evp_pkey, &encodedPoint);
+//            printf("tls_construct_client_hello, encodedlen: %d\n\n", encodedlen);
+//
+////            if (!WPACKET_put_bytes_u8(pkt, NAMED_CURVE_TYPE)
+////                    || !WPACKET_put_bytes_u8(pkt, 0)
+////                    || !WPACKET_put_bytes_u8(pkt, curve_id)
+////					|| !WPACKET_sub_memcpy_u8(pkt, encodedPoint, encodedlen)) {
+////				SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE,
+////					   ERR_R_INTERNAL_ERROR);
+////			}
+//
+//            if (!WPACKET_sub_memcpy_u8(pkt, encodedPoint, encodedlen)) {
+//				SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE,
+//					   ERR_R_INTERNAL_ERROR);
+//			}
+//
+//            if (!WPACKET_close(pkt)) {
+//				SSLerr(SSL_F_TLS_CONSTRUCT_CLIENT_HELLO, ERR_R_INTERNAL_ERROR);
+//				return 0;
+//			}
 
             size_t encodedlen = EVP_PKEY_get1_tls_encodedpoint(dumy_evp_pkey, &encodedPoint);
-            printf("tls_construct_client_hello, encodedPoint: %s\n\n", encodedPoint);
             if (!WPACKET_sub_memcpy_u8(pkt, encodedPoint, encodedlen)) {
-				SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE,
-					   ERR_R_INTERNAL_ERROR);
-			}
+            				SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE,
+            					   ERR_R_INTERNAL_ERROR);
+            			}
 
-            if (!WPACKET_close(pkt)) {
-				SSLerr(SSL_F_TLS_CONSTRUCT_CLIENT_HELLO, ERR_R_INTERNAL_ERROR);
-				return 0;
-			}
-
-            /* Encode the public key. */
-//            size_t encodedlen = EVP_PKEY_get1_tls_encodedpoint(dumy_evp_pkey,
-//                                                        &encodedPoint);
-//            if (!WPACKET_sub_memcpy_u8(pkt, encodedPoint, encodedlen)) {
-//                        SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE,
-//                               ERR_R_INTERNAL_ERROR);
-//            }
     /* End IBIHOP extension */
 
 

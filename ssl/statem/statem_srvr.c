@@ -1611,6 +1611,7 @@ static void ssl_check_for_safari(SSL *s, const CLIENTHELLO_MSG *hello)
 
 MSG_PROCESS_RETURN tls_process_client_hello(SSL *s, PACKET *pkt)
 {
+	PACKET encoded_pt;
     int al = SSL_AD_INTERNAL_ERROR;
     /* |cookie| will only be initialized for DTLS. */
     PACKET session_id, compression, extensions, cookie;
@@ -1786,27 +1787,59 @@ MSG_PROCESS_RETURN tls_process_client_hello(SSL *s, PACKET *pkt)
         }
 
         /* Could be empty. */
-        unsigned int j;
-        const unsigned char *encodedpoint;
-        if (PACKET_remaining(pkt) == 0) {
-            PACKET_null_init(&clienthello->extensions);
-        } else {
-            if (!PACKET_get_length_prefixed_2(pkt, &clienthello->extensions)
-            		|| !PACKET_get_1(pkt, &j) || !PACKET_get_bytes(pkt, &encodedpoint, j)
-                    || PACKET_remaining(pkt) != 0) {
-                al = SSL_AD_DECODE_ERROR;
-                SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, SSL_R_LENGTH_MISMATCH);
-                goto f_err;
-            }
-            PACKET encoded_pt;
-            // todo: parse the encoded point.
-            if (!EVP_PKEY_set1_tls_encodedpoint(s->s3->peer_tmp,
-            									encodedpoint,
-            		                            j)) {
-                    SSLerr(SSL_F_TLS_PROCESS_SKE_ECDHE, SSL_R_BAD_ECPOINT);
-                    return 0;
-                }
-        }
+//	   if (PACKET_remaining(pkt) == 0) {
+//		   PACKET_null_init(&clienthello->extensions);
+//	   } else {
+//		   if (!PACKET_get_length_prefixed_2(pkt, &clienthello->extensions)
+//				   || PACKET_remaining(pkt) != 0) {
+//			   al = SSL_AD_DECODE_ERROR;
+//			   SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, SSL_R_LENGTH_MISMATCH);
+//			   goto f_err;
+//		   }
+//	   }
+
+ 	   if (PACKET_remaining(pkt) == 0) {
+ 		   PACKET_null_init(&clienthello->extensions);
+ 	   } else {
+
+ 		  if (!PACKET_get_length_prefixed_2(pkt, &clienthello->extensions)) {
+			   al = SSL_AD_DECODE_ERROR;
+			   SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, SSL_R_LENGTH_MISMATCH);
+			   goto f_err;
+		   }
+
+
+ 		  if (!PACKET_get_length_prefixed_2(pkt, &encoded_pt) || PACKET_remaining(pkt) != 0) {
+			   al = SSL_AD_DECODE_ERROR;
+			   SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, SSL_R_LENGTH_MISMATCH);
+			   goto f_err;
+		   }
+
+
+ 	   }
+
+        /* Could be empty. */
+//        unsigned int j;
+//        const unsigned char *encodedpoint;
+//        if (PACKET_remaining(pkt) == 0) {
+//            PACKET_null_init(&clienthello->extensions);
+//        } else {
+//            if (!PACKET_get_length_prefixed_2(pkt, &clienthello->extensions)
+//            		|| !PACKET_get_1(pkt, &j) || !PACKET_get_bytes(pkt, &encodedpoint, j)
+//                    || PACKET_remaining(pkt) != 0) {
+//                al = SSL_AD_DECODE_ERROR;
+//                SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, SSL_R_LENGTH_MISMATCH);
+//                goto f_err;
+//            }
+//            PACKET encoded_pt;
+//            // todo: parse the encoded point.
+//            if (!EVP_PKEY_set1_tls_encodedpoint(s->s3->peer_tmp,
+//            									encodedpoint,
+//            		                            j)) {
+//                    SSLerr(SSL_F_TLS_PROCESS_SKE_ECDHE, SSL_R_BAD_ECPOINT);
+//                    return 0;
+//                }
+//        }
     }
 
     if (!PACKET_copy_all(&compression, clienthello->compressions,
@@ -1826,6 +1859,35 @@ MSG_PROCESS_RETURN tls_process_client_hello(SSL *s, PACKET *pkt)
         goto f_err;
     }
     s->clienthello = clienthello;
+
+    // IBIHOP: Parse encoded point ONLY
+    unsigned char *encodedPoint = PACKET_data(&encoded_pt);
+    printf("tls_process_client_hello, encodedPoint: %s\n\n", encodedPoint);
+/* If you need to parse more than encoded point do below but not working because
+ * it requires pub key.
+ */
+/*
+    EVP_PKEY *peer_tmp = NULL;
+    DH *dh = NULL;
+    peer_tmp = EVP_PKEY_new();
+    dh = DH_new();
+    if (EVP_PKEY_assign_DH(peer_tmp, dh) == 0) {
+    	al = SSL_AD_INTERNAL_ERROR;
+		SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, ERR_R_INTERNAL_ERROR);
+		goto f_err;
+	}
+
+    if(peer_tmp->ameth == NULL) {
+    	printf("peer_tmp->ameth is NULL\n\n");
+
+    }
+
+    if (!EVP_PKEY_set1_tls_encodedpoint(peer_tmp,
+    		encodedPoint, PACKET_remaining(&encoded_pt))) {
+    	goto f_err;
+    }
+*/
+
 
     return MSG_PROCESS_CONTINUE_PROCESSING;
  f_err:

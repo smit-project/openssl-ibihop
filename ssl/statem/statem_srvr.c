@@ -1611,8 +1611,6 @@ static void ssl_check_for_safari(SSL *s, const CLIENTHELLO_MSG *hello)
 
 MSG_PROCESS_RETURN tls_process_client_hello(SSL *s, PACKET *pkt)
 {
-	unsigned int curve_type, curve_id;
-	PACKET encoded_pt;
     int al = SSL_AD_INTERNAL_ERROR;
     /* |cookie| will only be initialized for DTLS. */
     PACKET session_id, compression, extensions, cookie;
@@ -1788,7 +1786,6 @@ MSG_PROCESS_RETURN tls_process_client_hello(SSL *s, PACKET *pkt)
         }
 
         /* Could be empty. */
-<<<<<<< HEAD
         unsigned int j;
         int curve_id = TLSEXT_curve_P_256;
         const unsigned char *encodedpoint;
@@ -1825,38 +1822,6 @@ MSG_PROCESS_RETURN tls_process_client_hello(SSL *s, PACKET *pkt)
                     BN_free(x);
                     BN_free(y);
         }
-=======
-//	   if (PACKET_remaining(pkt) == 0) {
-//		   PACKET_null_init(&clienthello->extensions);
-//	   } else {
-//		   if (!PACKET_get_length_prefixed_2(pkt, &clienthello->extensions)
-//				   || PACKET_remaining(pkt) != 0) {
-//			   al = SSL_AD_DECODE_ERROR;
-//			   SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, SSL_R_LENGTH_MISMATCH);
-//			   goto f_err;
-//		   }
-//	   }
-
- 	   if (PACKET_remaining(pkt) == 0) {
- 		   PACKET_null_init(&clienthello->extensions);
- 	   } else {
-
- 		  if (!PACKET_get_length_prefixed_2(pkt, &clienthello->extensions)) {
-			   al = SSL_AD_DECODE_ERROR;
-			   SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, SSL_R_LENGTH_MISMATCH);
-			   goto f_err;
-		   }
-
- 		  if (!PACKET_get_length_prefixed_1(pkt, &encoded_pt)) {
-			   al = SSL_AD_DECODE_ERROR;
-			   SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, SSL_R_LENGTH_MISMATCH);
-			   goto f_err;
-		   }
-
-
- 	   }
-
->>>>>>> e7562f67d71e3fea0b8937294ec04c6ea82ad79f
     }
 
     if (!PACKET_copy_all(&compression, clienthello->compressions,
@@ -1876,28 +1841,6 @@ MSG_PROCESS_RETURN tls_process_client_hello(SSL *s, PACKET *pkt)
         goto f_err;
     }
     s->clienthello = clienthello;
-
-
-
-
-    // IBIHOP: Parse encoded point ONLY
-    unsigned char *encodedPoint = PACKET_data(&encoded_pt);
-    int curve_id_2 = TLSEXT_curve_P_256;
-    if ((s->s3->peer_tmp = ssl_generate_param_group(curve_id_2)) == NULL) {
-    	al = SSL_AD_INTERNAL_ERROR;
-		SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, ERR_R_INTERNAL_ERROR);
-		goto f_err;
-	}
-
-
-    size_t encodedLen = PACKET_remaining(&encoded_pt);
-    printf("tls_process_client_hello, encodedLen: %d\n\n", encodedLen);
-    if (!EVP_PKEY_set1_tls_encodedpoint(s->s3->peer_tmp,
-    		encodedPoint, encodedLen)) {
-    	goto f_err;
-    }
-
-
 
     return MSG_PROCESS_CONTINUE_PROCESSING;
  f_err:

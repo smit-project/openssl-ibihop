@@ -1787,25 +1787,40 @@ MSG_PROCESS_RETURN tls_process_client_hello(SSL *s, PACKET *pkt)
 
         /* Could be empty. */
         unsigned int j;
+        int curve_id = TLSEXT_curve_P_256;
         const unsigned char *encodedpoint;
+        PACKET encoded_pt;
+        s->s3->tmp.dumy_ckey = EVP_PKEY_new();
+        s->s3->tmp.dumy_skey = ssl_generate_pkey_group(curve_id);
+
+        if (s->s3->tmp.dumy_ckey == NULL || EVP_PKEY_copy_parameters(s->s3->tmp.dumy_ckey, s->s3->tmp.dumy_skey) <= 0) {
+                    SSLerr(SSL_F_TLS_PROCESS_CKE_ECDHE, ERR_R_EVP_LIB);
+                    goto err;
+                }
+
         if (PACKET_remaining(pkt) == 0) {
             PACKET_null_init(&clienthello->extensions);
         } else {
             if (!PACKET_get_length_prefixed_2(pkt, &clienthello->extensions)
-            		|| !PACKET_get_1(pkt, &j) || !PACKET_get_bytes(pkt, &encodedpoint, j)
+            		|| !PACKET_get_1(pkt, &j)
+					|| !PACKET_get_bytes(pkt, &encodedpoint, j)
+					|| !EVP_PKEY_set1_tls_encodedpoint(s->s3->tmp.dumy_ckey,encodedpoint, j)
                     || PACKET_remaining(pkt) != 0) {
                 al = SSL_AD_DECODE_ERROR;
                 SSLerr(SSL_F_TLS_PROCESS_CLIENT_HELLO, SSL_R_LENGTH_MISMATCH);
                 goto f_err;
             }
-            PACKET encoded_pt;
-            // todo: parse the encoded point.
-            if (!EVP_PKEY_set1_tls_encodedpoint(s->s3->peer_tmp,
-            									encodedpoint,
-            		                            j)) {
-                    SSLerr(SSL_F_TLS_PROCESS_SKE_ECDHE, SSL_R_BAD_ECPOINT);
-                    return 0;
-                }
+
+            /* Print value of E for test */
+                    BIGNUM *x = BN_new();
+                    BIGNUM *y = BN_new();
+                    EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.dumy_ckey->pkey.ec->group, s->s3->tmp.dumy_ckey->pkey.ec->pub_key, x, y, NULL);
+                    BN_print_fp(stdout, x);
+                    putc('\n', stdout);
+                    BN_print_fp(stdout, y);
+                    putc('\n', stdout);
+                    BN_free(x);
+                    BN_free(y);
         }
     }
 
@@ -2776,82 +2791,61 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
             goto err;
         }
         s->s3->tmp.pkey = ssl_generate_pkey_group(curve_id);
+        s->s3->tmp.dumy_skey = ssl_generate_pkey_group(curve_id);
         /* Generate a new key for this curve */
-        if (s->s3->tmp.pkey == NULL) {
+        if (s->s3->tmp.pkey == NULL || s->s3->tmp.dumy_skey == NULL) {
             SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE, ERR_R_EVP_LIB);
             goto f_err;
         }
 
-        /* Initial IBIHOP params */
-        PARA_VER *params_a;
-        params_a = (PARA_VER*) malloc(sizeof(PARA_VER));
-        PARA_VER_init(params_a);
+        // Generate prover challenge
+               printf("Initializing system parameters of prover and verifier...\n");
+               PARA_PRO *params_b;
+               params_b = (PARA_PRO*) malloc(sizeof(PARA_PRO));
+               PARA_PRO_init1(params_b);
 
-        // generate public and private key pairs.
-        printf("Generating keys of prover and verifier...\n");
-        // CHECK KEY GEN CURVE ID USAGE.
-        EC_KEY* dumy_key;
-        EVP_PKEY* dumy_evp_pkey;
-        EC_POINT* dumy_ec_point;
-        dumy_evp_pkey = ssl_generate_pkey_group(curve_id);
-        dumy_ec_point = dumy_evp_pkey->pkey.ec->pub_key;
-        dumy_key = EVP_PKEY_get1_EC_KEY(dumy_evp_pkey);
-        EC_KEY *key = NULL;
-        const TLS_GROUP_INFO *ginf = tls1_group_id_lookup(curve_id);
-        //  //int eccgrp;
-        //  //eccgrp = OBJ_txt2nid(curve);
-        key = EC_KEY_new_by_curve_name(ginf->nid);
-        if (s->s3->tmp.pkey->pkey.ec->group == NULL)
-        	printf("err on ssl object.\n");
-        EC_KEY *tmp_ec_key = s->s3->tmp.pkey->pkey.ec;
-        params_a->order = s->s3->tmp.pkey->pkey.ec->group->order;
-        //
-        if (!(EC_KEY_generate_key(key)))
-            return NULL;
-        //curve_name_id = EC_GROUP_get_curve_name(s->s3->tmp.pkey->pkey.ec->group);
-        EVP_PKEY_CTX *pctx = NULL;
-        params_a->key = key;//ibihop_keygen(curve_id, pctx);
+               // generate public and private key pairs.
+               printf("Generating keys of prover and verifier...\n");
+               params_b->key = EC_KEY_new_by_curve_name(s->s3->tmp.dumy_skey->pkey.ec->group->curve_name);
+               // set keys to verifier and prover.
+               printf("Setting keys to prover and verifier...\n");
+               params_b->sk = EC_KEY_get0_private_key(params_b->key);
 
-        // set keys to verifier and prover.
-        printf("Setting keys to prover and verifier...\n");
-        params_a->sk = EC_KEY_get0_private_key(params_a->key);
+               printf("Setting other system parameters...\n");
+               params_b->group = EC_KEY_get0_group(params_b->key);	// set EC group information.
 
-        // TEST BIGNUM convertion to bytes
-        int num_bytes = BN_num_bytes(params_a->sk);
-        my_bn = malloc((num_bytes) * sizeof(char));
-        my_bn_len = BN_bn2bin(params_a->sk, my_bn);
-        BIGNUM *p = BN_bin2bn(my_bn, my_bn_len, NULL);
-        printf("P: %d\n\n", BN_cmp(params_a->sk, p));
-        printf("Result is %s\n", BN_bn2dec(p));
-        // END TEST
+               EC_GROUP_get_order(params_b->group, params_b->order, NULL);	// set order of group
 
-        printf("Setting other system parameters...\n");
-        params_a->group = EC_KEY_get0_group(params_a->key);	// set EC group information.
+               printf("Message flow 2: Prover challenges verifier by sending a piont R...\n");
+               challenge_verifier(params_b);
 
-        EC_GROUP_get_order(params_a->group, params_a->order, NULL);	// set order of group
+        // Copy publick key to dummy skey
+               s->s3->tmp.dumy_skey->pkey.ec->pub_key = params_b->R;
+               s->s3->tmp.dumy_skey->pkey.ec->priv_key = params_b->r;
 
-        /* Generate challenge to prover */
-        printf("Message flow 1: Verifier challenges prover by sending a point E...\n");
-        challenge_prover(params_a);
+        // Print value of E for test
+               printf("Value of E:\n");
+               BIGNUM *x = BN_new();
+               BIGNUM *y = BN_new();
+               EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.dumy_ckey->pkey.ec->group, s->s3->tmp.dumy_ckey->pkey.ec->pub_key, x, y, NULL);
+               BN_print_fp(stdout, x);
+               putc('\n', stdout);
+               BN_print_fp(stdout, y);
+               putc('\n', stdout);
 
-        /* Copy pub key information to pkey */
-        s->s3->tmp.pkey->pkey.ec->pub_key = params_a->E;
-        s->s3->tmp.pkey->pkey.ec->priv_key = params_a->e_inv;
-
-        /* Print value of E for test */
-        BIGNUM *x = BN_new();
-        BIGNUM *y = BN_new();
-        EC_POINT_get_affine_coordinates_GFp(params_a->group, params_a->E, x, y, NULL);
-        BN_print_fp(stdout, x);
-        putc('\n', stdout);
-        BN_print_fp(stdout, y);
-        putc('\n', stdout);
-        BN_free(x);
-        BN_free(y);
+        // Print value of R for test
+               printf("Value of R:\n");
+               EC_POINT_get_affine_coordinates_GFp(params_b->group, params_b->R, x, y, NULL);
+               BN_print_fp(stdout, x);
+               putc('\n', stdout);
+               BN_print_fp(stdout, y);
+               putc('\n', stdout);
+               BN_free(x);
+               BN_free(y);
 
 
         /* Encode the public key. */
-        encodedlen = EVP_PKEY_get1_tls_encodedpoint(s->s3->tmp.pkey,
+        encodedlen = EVP_PKEY_get1_tls_encodedpoint(s->s3->tmp.dumy_skey,
                                                     &encodedPoint);
         /* Encode the challenge 1 */
                 //todo put the challenge_prover()
@@ -3470,6 +3464,31 @@ static int tls_process_cke_ecdhe(SSL *s, PACKET *pkt, int *al)
         }
     }
 
+    // IBIHOP: set ckey to dummy key received by client hello flight.
+    // IBIHOP: set skey to dummy key generated by server itself.
+    // This step can be removed by correctly set the values in somewhere before.
+    // Print value of ckey and skey for test
+    ckey = s->s3->tmp.dumy_ckey;
+    skey = s->s3->tmp.dumy_skey;
+        BIGNUM *x = BN_new();
+        BIGNUM *y = BN_new();
+        printf("Value of skey:\n");
+        EC_POINT_get_affine_coordinates_GFp(skey->pkey.ec->group, skey->pkey.ec->pub_key, x, y, NULL);
+        BN_print_fp(stdout, x);
+        putc('\n', stdout);
+        BN_print_fp(stdout, y);
+        putc('\n', stdout);
+        printf("Value of ckey:\n");
+        EC_POINT_get_affine_coordinates_GFp(ckey->pkey.ec->group, ckey->pkey.ec->pub_key, x, y, NULL);
+        BN_print_fp(stdout, x);
+        putc('\n', stdout);
+        BN_print_fp(stdout, y);
+        putc('\n', stdout);
+        printf("Value of private key of skey:\n");
+        //EC_POINT_get_affine_coordinates_GFp(ckey->pkey.ec->group, ckey->pkey.ec->pub_key, x, y, NULL);
+        BN_print_fp(stdout, skey->pkey.ec->priv_key);
+        BN_free(x);
+        BN_free(y);
     if (ssl_derive(s, skey, ckey, 1) == 0) {
         *al = SSL_AD_INTERNAL_ERROR;
         SSLerr(SSL_F_TLS_PROCESS_CKE_ECDHE, ERR_R_INTERNAL_ERROR);

@@ -1427,6 +1427,24 @@ typedef struct ssl3_state_st {
         EVP_PKEY *pkey;         /* holds short lived DH/ECDH key */
         EVP_PKEY *dumy_skey;	/* dummy evp_pkeys for ibihop server keys */
         EVP_PKEY *dumy_ckey;	/* dummy evp_pkeys for ibihop client keys */
+        BIGNUM *s;				/* resopnse s for Pass 4, test only. */
+        struct {
+        	BIGNUM *r;
+        	BIGNUM *e;
+        	BIGNUM *e_inv;
+        	BIGNUM *f;
+        	BIGNUM *s;
+        	const BIGNUM* order;
+        	const BIGNUM *psk;		// prover's private key
+        	const BIGNUM *vsk;		// verifier's private key
+        	const EC_POINT *vpk;	// verifier's public key
+        	const EC_POINT *ppk;	// prover's public key
+        	EC_POINT *R;
+        	EC_POINT *E;
+        	const EC_KEY *key;
+        	const EC_GROUP *group;
+        	int curve_id;
+        } ibihop;
 # endif
         /* used for certificate requests */
         int cert_req;

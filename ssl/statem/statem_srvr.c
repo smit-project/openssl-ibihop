@@ -147,18 +147,18 @@ EC_KEY* ibihop_keygen1(char *curve)
 	1 - EC group information is not given (NULL).
 	2 - message generation failed.
 ***/
-int challenge_verifier(PARA_PRO *params)
+int challenge_verifier(SSL *s)
 {
-  if (params->group != NULL)
-    params->R = EC_POINT_new(params->group);
+  if (s->s3->tmp.ibihop.group != NULL)
+    s->s3->tmp.ibihop.R = EC_POINT_new(s->s3->tmp.ibihop.group);
   else
     return 1;
-  EC_GROUP_get_order(params->group, params->order, NULL);
-  BN_rand_range(params->r, params->order);
+  EC_GROUP_get_order(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.order, NULL);
+  BN_rand_range(s->s3->tmp.ibihop.r, s->s3->tmp.ibihop.order);
 
   BN_CTX *ctx = BN_CTX_new();
 
-  if (!EC_POINT_mul(params->group, params->R, params->r, NULL, NULL, ctx))
+  if (!EC_POINT_mul(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.R, s->s3->tmp.ibihop.r, NULL, NULL, ctx))
     return 2;
 
   BN_CTX_free(ctx);
@@ -221,9 +221,9 @@ int challenge_verifier(PARA_PRO *params)
 	1 - EC group information is not given (NULL).
 	2 - verification of verifier's response failed.
 ***/
-int respond_verifier(PARA_PRO *params, EC_POINT *E, BIGNUM *f)
+int respond_verifier(SSL *s)
 {
-  if (params->group == NULL)
+  if (s->s3->tmp.ibihop.group == NULL)
     return 1;
 
   BIGNUM *tmp = BN_new();
@@ -231,27 +231,27 @@ int respond_verifier(PARA_PRO *params, EC_POINT *E, BIGNUM *f)
   BIGNUM *y = BN_new();
   BIGNUM *e_prime = BN_new();
   BN_CTX *ctx = BN_CTX_new();
-  EC_POINT *ret = EC_POINT_new(params->group);
-  const EC_POINT *generator = EC_POINT_new(params->group);
-  EC_POINT *rY = EC_POINT_new(params->group);
+  EC_POINT *ret = EC_POINT_new(s->s3->tmp.ibihop.group);
+  const EC_POINT *generator = EC_POINT_new(s->s3->tmp.ibihop.group);
+  EC_POINT *rY = EC_POINT_new(s->s3->tmp.ibihop.group);
 
   // calculate [rY]_x
-  EC_POINT_mul(params->group, rY, NULL, params->vpk, params->r, ctx);
-  EC_POINT_get_affine_coordinates_GFp(params->group, rY, x, y, ctx);
+  EC_POINT_mul(s->s3->tmp.ibihop.group, rY, NULL, s->s3->tmp.ibihop.vpk, s->s3->tmp.ibihop.r, ctx);
+  EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.ibihop.group, rY, x, y, ctx);
 
   // calculate [([rY]_x)P]_x
-  EC_POINT_mul(params->group, ret, x, NULL, NULL, ctx);
-  EC_POINT_get_affine_coordinates_GFp(params->group, ret, x, y, ctx);
+  EC_POINT_mul(s->s3->tmp.ibihop.group, ret, x, NULL, NULL, ctx);
+  EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.ibihop.group, ret, x, y, ctx);
 
-  BN_mod_sub(e_prime, f, x, params->order, ctx);
+  BN_mod_sub(e_prime, s->s3->tmp.ibihop.f, x, s->s3->tmp.ibihop.order, ctx);
 
-  EC_POINT_mul(params->group, ret, NULL, E, e_prime, ctx);
-  generator = EC_GROUP_get0_generator(params->group);
-  if (EC_POINT_cmp(params->group, ret, generator, ctx) != 0)
+  EC_POINT_mul(s->s3->tmp.ibihop.group, ret, NULL, s->s3->tmp.ibihop.E, e_prime, ctx);
+  generator = EC_GROUP_get0_generator(s->s3->tmp.ibihop.group);
+  if (EC_POINT_cmp(s->s3->tmp.ibihop.group, ret, generator, ctx) != 0)
     return 2;	// verification failed.
 
-  BN_mod_mul(tmp, e_prime, params->sk, params->order, ctx);
-  BN_mod_add(params->s, tmp, params->r, params->order, ctx);
+  BN_mod_mul(tmp, e_prime, s->s3->tmp.ibihop.psk, s->s3->tmp.ibihop.order, ctx);
+  BN_mod_add(s->s3->tmp.ibihop.s, tmp, s->s3->tmp.ibihop.r, s->s3->tmp.ibihop.order, ctx);
 
   BN_free(tmp);
   BN_free(x);
@@ -325,6 +325,26 @@ void PARA_VER_init1(PARA_VER *params)
   params->key = NULL;
   params->group = NULL;
 }
+
+void IBIHOP_param_init1(SSL *s)
+{
+	s->s3->tmp.ibihop.r = BN_new();
+	s->s3->tmp.ibihop.e = BN_new();
+	s->s3->tmp.ibihop.e_inv = BN_new();
+	s->s3->tmp.ibihop.f = BN_new();
+	s->s3->tmp.ibihop.s = BN_new();
+	s->s3->tmp.ibihop.order = BN_new();
+	s->s3->tmp.ibihop.psk = BN_new();		// prover's private key
+	s->s3->tmp.ibihop.vsk = BN_new();		// verifier's private key
+	s->s3->tmp.ibihop.vpk = NULL;	// verifier's public key
+	s->s3->tmp.ibihop.ppk = NULL;	// prover's public key
+	s->s3->tmp.ibihop.R = NULL;
+	s->s3->tmp.ibihop.E = NULL;
+	s->s3->tmp.ibihop.key = NULL;
+	s->s3->tmp.ibihop.group = NULL;
+	s->s3->tmp.ibihop.curve_id = 0;
+}
+
 
 /***
   This function free created objects of the structure pointer of PARA_VER.
@@ -1787,11 +1807,12 @@ MSG_PROCESS_RETURN tls_process_client_hello(SSL *s, PACKET *pkt)
 
         /* Could be empty. */
         unsigned int j;
-        int curve_id = TLSEXT_curve_P_256;
         const unsigned char *encodedpoint;
         PACKET encoded_pt;
+        IBIHOP_param_init1(s);
+        s->s3->tmp.ibihop.curve_id = TLSEXT_curve_P_256;
         s->s3->tmp.dumy_ckey = EVP_PKEY_new();
-        s->s3->tmp.dumy_skey = ssl_generate_pkey_group(curve_id);
+        s->s3->tmp.dumy_skey = ssl_generate_pkey_group(s->s3->tmp.ibihop.curve_id);
 
         if (s->s3->tmp.dumy_ckey == NULL || EVP_PKEY_copy_parameters(s->s3->tmp.dumy_ckey, s->s3->tmp.dumy_skey) <= 0) {
                     SSLerr(SSL_F_TLS_PROCESS_CKE_ECDHE, ERR_R_EVP_LIB);
@@ -2791,7 +2812,7 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
             goto err;
         }
         s->s3->tmp.pkey = ssl_generate_pkey_group(curve_id);
-        s->s3->tmp.dumy_skey = ssl_generate_pkey_group(curve_id);
+        s->s3->tmp.dumy_skey = ssl_generate_pkey_group(s->s3->tmp.ibihop.curve_id);
         /* Generate a new key for this curve */
         if (s->s3->tmp.pkey == NULL || s->s3->tmp.dumy_skey == NULL) {
             SSLerr(SSL_F_TLS_CONSTRUCT_SERVER_KEY_EXCHANGE, ERR_R_EVP_LIB);
@@ -2799,29 +2820,31 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
         }
 
         // Generate prover challenge
-               printf("Initializing system parameters of prover and verifier...\n");
-               PARA_PRO *params_b;
-               params_b = (PARA_PRO*) malloc(sizeof(PARA_PRO));
-               PARA_PRO_init1(params_b);
+//               printf("Initializing system parameters of prover and verifier...\n");
+//               PARA_PRO *params_b;
+//               params_b = (PARA_PRO*) malloc(sizeof(PARA_PRO));
+//               PARA_PRO_init1(params_b);
 
                // generate public and private key pairs.
-               printf("Generating keys of prover and verifier...\n");
-               params_b->key = EC_KEY_new_by_curve_name(s->s3->tmp.dumy_skey->pkey.ec->group->curve_name);
-               // set keys to verifier and prover.
-               printf("Setting keys to prover and verifier...\n");
-               params_b->sk = EC_KEY_get0_private_key(params_b->key);
+	   printf("Generating keys of prover and verifier...\n");
+	   s->s3->tmp.ibihop.key = EC_KEY_new_by_curve_name(s->s3->tmp.dumy_skey->pkey.ec->group->curve_name);
+	   // set keys to verifier and prover.
+	   printf("Setting keys to prover and verifier...\n");
+	   s->s3->tmp.ibihop.psk = EC_KEY_get0_private_key(s->s3->tmp.ibihop.key);
 
-               printf("Setting other system parameters...\n");
-               params_b->group = EC_KEY_get0_group(params_b->key);	// set EC group information.
+	   printf("Setting other system parameters...\n");
+	   s->s3->tmp.ibihop.group = EC_KEY_get0_group(s->s3->tmp.ibihop.key);	// set EC group information.
 
-               EC_GROUP_get_order(params_b->group, params_b->order, NULL);	// set order of group
+	   EC_GROUP_get_order(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.order, NULL);	// set order of group
 
-               printf("Message flow 2: Prover challenges verifier by sending a piont R...\n");
-               challenge_verifier(params_b);
+	   printf("Message flow 2: Prover challenges verifier by sending a piont R...\n");
+	   challenge_verifier(s);
 
         // Copy publick key to dummy skey
-               s->s3->tmp.dumy_skey->pkey.ec->pub_key = params_b->R;
-               s->s3->tmp.dumy_skey->pkey.ec->priv_key = params_b->r;
+	   s->s3->tmp.ibihop.ppk = s->s3->tmp.ibihop.R;	// for test, should be real public key
+	   s->s3->tmp.ibihop.psk = s->s3->tmp.ibihop.r;	// for test, should be real private key
+	   s->s3->tmp.dumy_skey->pkey.ec->pub_key = s->s3->tmp.ibihop.ppk;
+	   s->s3->tmp.dumy_skey->pkey.ec->priv_key = s->s3->tmp.ibihop.psk;
 
         // Print value of E for test
                printf("Value of E:\n");
@@ -2835,7 +2858,7 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
 
         // Print value of R for test
                printf("Value of R:\n");
-               EC_POINT_get_affine_coordinates_GFp(params_b->group, params_b->R, x, y, NULL);
+               EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.R, x, y, NULL);
                BN_print_fp(stdout, x);
                putc('\n', stdout);
                BN_print_fp(stdout, y);
@@ -3474,6 +3497,7 @@ static int tls_process_cke_ecdhe(SSL *s, PACKET *pkt, int *al)
 
     BIGNUM *f = BN_bin2bn(my_bn, my_bn_len, NULL);
     printf("Result is %s\n", BN_bn2dec(f));
+    s->s3->tmp.ibihop.f = f;
 
     // IBIHOP: set ckey to dummy key received by client hello flight.
     // IBIHOP: set skey to dummy key generated by server itself.
@@ -3503,26 +3527,33 @@ static int tls_process_cke_ecdhe(SSL *s, PACKET *pkt, int *al)
 
 	/* check if the received response f is valid. */
 	// set system parameters for ibihop. This is for test only, it should be somehow managed before.
-	printf("Initializing system parameters of prover and verifier...\n");
-	PARA_PRO *params_s;
-	params_s = (PARA_PRO*) malloc(sizeof(PARA_PRO));
-	PARA_PRO_init1(params_s);
+//	printf("Initializing system parameters of prover and verifier...\n");
+//	PARA_PRO *params_s;
+//	params_s = (PARA_PRO*) malloc(sizeof(PARA_PRO));
+//	PARA_PRO_init1(params_s);
 
     // set keys to verifier and prover.
    printf("Setting keys to prover and verifier...\n");
-   params_s->sk = s->s3->tmp.dumy_skey->pkey.ec->priv_key;
-   params_s->vpk = ckey->pkey.ec->pub_key;
+//   params_s->sk = s->s3->tmp.dumy_skey->pkey.ec->priv_key;
+   s->s3->tmp.ibihop.vpk = ckey->pkey.ec->pub_key;
+   s->s3->tmp.ibihop.E = ckey->pkey.ec->pub_key;
+   s->s3->tmp.ibihop.R = s->s3->tmp.dumy_skey->pkey.ec->pub_key;
+   s->s3->tmp.ibihop.r = s->s3->tmp.dumy_skey->pkey.ec->priv_key;
 
-   printf("Setting other system parameters...\n");
-   params_s->group = s->s3->tmp.dumy_skey->pkey.ec->group;	// set EC group information.
-   params_s->order = s->s3->tmp.dumy_skey->pkey.ec->group->order;
-   params_s->R = s->s3->tmp.dumy_skey->pkey.ec->pub_key;
-   params_s->r = s->s3->tmp.dumy_skey->pkey.ec->priv_key;
+//   printf("Setting other system parameters...\n");
+//   params_s->group = s->s3->tmp.dumy_skey->pkey.ec->group;	// set EC group information.
+//   params_s->order = s->s3->tmp.dumy_skey->pkey.ec->group->order;
+//   params_s->R = s->s3->tmp.dumy_skey->pkey.ec->pub_key;
+//   params_s->r = s->s3->tmp.dumy_skey->pkey.ec->priv_key;
 
-   if (respond_verifier(params_s, ckey->pkey.ec->pub_key, f) != 0)
+   if (respond_verifier(s) != 0)
 	   printf("Verifier is invalid.\n");
    else
+   {
 	   printf("Verifier is valid.\n");
+//	   s->s3->tmp.s = params_s->s;
+	   printf("Result of s is %s\n", BN_bn2dec(s->s3->tmp.ibihop.s));
+   }
 
     if (ssl_derive(s, skey, ckey, 1) == 0) {
         *al = SSL_AD_INTERNAL_ERROR;
@@ -4046,6 +4077,17 @@ int tls_construct_new_session_ticket(SSL *s, WPACKET *pkt)
         s->session->ext.max_early_data = s->max_early_data;
     }
 
+    // adding to the beginning of the message, ibihop response s which will be sent to the peer.
+    unsigned char *my_bn = NULL;
+    int my_bn_len;
+    int num_bytes = BN_num_bytes(s->s3->tmp.ibihop.s);
+    my_bn = malloc((num_bytes) * sizeof(char));
+    my_bn_len = BN_bn2bin(s->s3->tmp.ibihop.s, my_bn);
+    if (!WPACKET_sub_memcpy_u8(pkt, my_bn, my_bn_len)) {
+            //SSLerr(SSL_F_TLS_CONSTRUCT_NEW_SESSION_TICKET, ERR_R_INTERNAL_ERROR);
+            goto err;
+    }
+
     /* get session encoding length */
     slen_full = i2d_SSL_SESSION(s->session, NULL);
     /*
@@ -4184,6 +4226,7 @@ int tls_construct_new_session_ticket(SSL *s, WPACKET *pkt)
         SSLerr(SSL_F_TLS_CONSTRUCT_NEW_SESSION_TICKET, ERR_R_INTERNAL_ERROR);
         goto err;
     }
+
     EVP_CIPHER_CTX_free(ctx);
     HMAC_CTX_free(hctx);
     OPENSSL_free(senc);

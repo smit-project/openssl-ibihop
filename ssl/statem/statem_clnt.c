@@ -3517,6 +3517,44 @@ static int tls_construct_cke_ecdhe(SSL *s, WPACKET *pkt, int *al)
             BN_free(x);
             BN_free(y);
 
+    // run pass 3 of IBIHOP, calculate f for server.
+    // client's public/private key should be extracted from the certificate and key files, respectively.
+    // here we set client public key as EC point E and private key as e^-1 for test only.
+   printf("Initializing system parameters of prover and verifier...\n");
+   PARA_VER *params_c;
+   params_c = (PARA_VER*) malloc(sizeof(PARA_VER));
+   PARA_VER_init1(params_c);
+
+   // set keys to verifier and prover.
+   printf("Setting keys to prover and verifier...\n");
+   params_c->sk = s->s3->tmp.dumy_ckey->pkey.ec->priv_key;
+   params_c->ppk = skey->pkey.ec->pub_key;
+
+   printf("Setting other system parameters...\n");
+   params_c->group = s->s3->tmp.dumy_ckey->pkey.ec->group;	// set EC group information.
+   params_c->order = s->s3->tmp.dumy_ckey->pkey.ec->group->order;
+   params_c->E = s->s3->tmp.dumy_ckey->pkey.ec->pub_key;
+   //params_c->e = s->s3->tmp.dumy_ckey->pkey.ec->priv_key;
+   BN_CTX *ctx = BN_CTX_new();
+   // calculate and set e, because here the e_inv equals to the private key of client. FOR TEST ONLY.
+   BN_mod_inverse(params_c->e, s->s3->tmp.dumy_ckey->pkey.ec->priv_key, params_c->order, ctx);
+   BN_CTX_free(ctx);
+
+   // calculate the response f
+   respond_prover(params_c, skey->pkey.ec->pub_key);
+
+   // translate f to bytes for sending
+   // TEST BIGNUM convertion to bytes
+   unsigned char *my_bn = NULL;
+   int my_bn_len;
+   int num_bytes = BN_num_bytes(params_c->f);
+   my_bn = malloc((num_bytes) * sizeof(char));
+   my_bn_len = BN_bn2bin(params_c->f, my_bn);
+   BIGNUM *p = BN_bin2bn(my_bn, my_bn_len, NULL);
+   printf("P: %d\n\n", BN_cmp(params_c->f, p));
+   printf("Result is %s\n", BN_bn2dec(p));
+   // END TEST
+
     if (ssl_derive(s, ckey, skey, 0) == 0) {
         SSLerr(SSL_F_TLS_CONSTRUCT_CKE_ECDHE, ERR_R_EVP_LIB);
         goto err;
@@ -3531,7 +3569,8 @@ static int tls_construct_cke_ecdhe(SSL *s, WPACKET *pkt, int *al)
         goto err;
     }
 
-    if (!WPACKET_sub_memcpy_u8(pkt, encodedPoint, encoded_pt_len)) {
+    if (!WPACKET_sub_memcpy_u8(pkt, encodedPoint, encoded_pt_len)
+    		|| !WPACKET_sub_memcpy_u8(pkt, my_bn, my_bn_len)) {
         SSLerr(SSL_F_TLS_CONSTRUCT_CKE_ECDHE, ERR_R_INTERNAL_ERROR);
         goto err;
     }

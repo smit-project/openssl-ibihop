@@ -1335,8 +1335,8 @@ STACK_OF(SSL_CIPHER) *ssl_create_cipher_list(const SSL_METHOD *ssl_method, STACK
      * server has both certificates, and is using the DEFAULT, or a client
      * preference).
      */
-    //ssl_cipher_apply_rule(0, SSL_IBIHOP, 0, 0, 0, 0, 0, CIPHER_ADD,
-    //                          -1, &head, &tail);
+    ssl_cipher_apply_rule(0, SSL_IBIHOP, 0, 0, 0, 0, 0, CIPHER_ADD,
+                              -1, &head, &tail);
     ssl_cipher_apply_rule(0, SSL_kECDHE, SSL_aECDSA, 0, 0, 0, 0, CIPHER_ADD,
                           -1, &head, &tail);
     ssl_cipher_apply_rule(0, SSL_kECDHE, 0, 0, 0, 0, 0, CIPHER_ADD, -1, &head,

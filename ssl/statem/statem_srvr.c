@@ -2841,10 +2841,12 @@ int tls_construct_server_key_exchange(SSL *s, WPACKET *pkt)
 	   challenge_verifier(s);
 
         // Copy publick key to dummy skey
-	   s->s3->tmp.ibihop.ppk = s->s3->tmp.ibihop.R;	// for test, should be real public key
-	   s->s3->tmp.ibihop.psk = s->s3->tmp.ibihop.r;	// for test, should be real private key
-	   s->s3->tmp.dumy_skey->pkey.ec->pub_key = s->s3->tmp.ibihop.ppk;
-	   s->s3->tmp.dumy_skey->pkey.ec->priv_key = s->s3->tmp.ibihop.psk;
+//	   s->s3->tmp.ibihop.ppk = s->s3->tmp.ibihop.R;	// for test, should be real public key
+//	   s->s3->tmp.ibihop.psk = s->s3->tmp.ibihop.r;	// for test, should be real private key
+	   s->s3->tmp.ibihop.ppk = s->cert->key->privatekey->pkey.ec->pub_key;
+	   s->s3->tmp.ibihop.psk = s->cert->key->privatekey->pkey.ec->priv_key;
+	   s->s3->tmp.dumy_skey->pkey.ec->pub_key = s->s3->tmp.ibihop.R;
+	   s->s3->tmp.dumy_skey->pkey.ec->priv_key = s->s3->tmp.ibihop.r;
 
         // Print value of E for test
                printf("Value of E:\n");
@@ -3535,7 +3537,9 @@ static int tls_process_cke_ecdhe(SSL *s, PACKET *pkt, int *al)
     // set keys to verifier and prover.
    printf("Setting keys to prover and verifier...\n");
 //   params_s->sk = s->s3->tmp.dumy_skey->pkey.ec->priv_key;
-   s->s3->tmp.ibihop.vpk = ckey->pkey.ec->pub_key;
+//   s->s3->tmp.ibihop.vpk = ckey->pkey.ec->pub_key;
+   EVP_PKEY *client_pub = X509_get0_pubkey(s->session->peer);
+   s->s3->tmp.ibihop.vpk = client_pub->pkey.ec->pub_key;
    s->s3->tmp.ibihop.E = ckey->pkey.ec->pub_key;
    s->s3->tmp.ibihop.R = s->s3->tmp.dumy_skey->pkey.ec->pub_key;
    s->s3->tmp.ibihop.r = s->s3->tmp.dumy_skey->pkey.ec->priv_key;

@@ -567,6 +567,27 @@ typedef struct ssl3_state_st {
 #  endif
 #  ifndef OPENSSL_NO_ECDH
         EC_KEY *ecdh;           /* holds short lived ECDH key */
+
+        EC_KEY *dumy_skey;	/* dummy evp_pkeys for ibihop server keys */
+        EC_KEY *dumy_ckey;	/* dummy evp_pkeys for ibihop client keys */
+		BIGNUM *s;				/* resopnse s for Pass 4, test only. */
+		struct {
+			BIGNUM *r;
+			BIGNUM *e;
+			BIGNUM *e_inv;
+			BIGNUM *f;
+			BIGNUM *s;
+			const BIGNUM *order;
+			const BIGNUM *psk;		// prover's private key
+			const BIGNUM *vsk;		// verifier's private key
+			const EC_POINT *vpk;	// verifier's public key
+			const EC_POINT *ppk;	// prover's public key
+			EC_POINT *R;
+			EC_POINT *E;
+			const EC_KEY *key;
+			const EC_GROUP *group;
+			int curve_id;
+		} ibihop;
 #  endif
         /* used when SSL_ST_FLUSH_DATA is entered */
         int next_state;

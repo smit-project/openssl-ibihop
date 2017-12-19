@@ -1,3 +1,7 @@
+.cproject
+.project
+.settings/
+
 # Object files
 *.o
 *.obj

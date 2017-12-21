@@ -2188,6 +2188,22 @@ int ssl3_send_server_key_exchange(SSL *s)
                 goto err;
             }
 
+            s->s3->tmp.dumy_skey = EC_KEY_new_by_curve_name(s->s3->tmp.ibihop.curve_id);
+
+            printf("Generating keys of prover and verifier...\n");
+		    s->s3->tmp.ibihop.key = EC_KEY_new_by_curve_name(s->s3->tmp.dumy_skey->group->curve_name);
+		    // set keys to verifier and prover.
+		    printf("Setting keys to prover and verifier...\n");
+		    s->s3->tmp.ibihop.psk = EC_KEY_get0_private_key(s->s3->tmp.ibihop.key);
+
+		    printf("Setting other system parameters...\n");
+		    s->s3->tmp.ibihop.group = EC_KEY_get0_group(s->s3->tmp.ibihop.key);	// set EC group information.
+
+		    EC_GROUP_get_order(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.order, NULL);	// set order of group
+
+		    printf("Message flow 2: Prover challenges verifier by sending a piont R...\n");
+		    challenge_verifier(s);
+
             /*
              * Encode the public key. First check the size of encoding and
              * allocate memory accordingly.

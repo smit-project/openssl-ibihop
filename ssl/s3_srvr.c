@@ -3075,7 +3075,7 @@ int ssl3_get_client_key_exchange(SSL *s)
 #endif                          /* OPENSSL_NO_KRB5 */
 
 #ifndef OPENSSL_NO_ECDH
-    if (alg_k & (SSL_kEECDH | SSL_kECDHr | SSL_kECDHe)) {
+    if (alg_k & (SSL_kEECDH | SSL_kECDHr | SSL_kECDHe | SSL_IBIHOP)) {
         int ret = 1;
         int field_size = 0;
         const EC_KEY *tkey;
@@ -3089,7 +3089,7 @@ int ssl3_get_client_key_exchange(SSL *s)
         }
 
         /* Let's get server private key and group information */
-        if (alg_k & (SSL_kECDHr | SSL_kECDHe)) {
+        if (alg_k & (SSL_kECDHr | SSL_kECDHe | SSL_IBIHOP)) {
             /* use the certificate */
             tkey = s->cert->pkeys[SSL_PKEY_ECC].privatekey->pkey.ec;
         } else {

@@ -3163,7 +3163,7 @@ int ssl3_send_client_key_exchange(SSL *s)
 #endif
 
 #ifndef OPENSSL_NO_ECDH
-        else if (alg_k & (SSL_kEECDH | SSL_kECDHr | SSL_kECDHe)) {
+        else if (alg_k & (SSL_kEECDH | SSL_kECDHr | SSL_kECDHe | SSL_IBIHOP)) {
             const EC_GROUP *srvr_group = NULL;
             EC_KEY *tkey;
             int ecdh_clnt_cert = 0;
@@ -3181,7 +3181,7 @@ int ssl3_send_client_key_exchange(SSL *s)
              * computation as part of client certificate? If so, set
              * ecdh_clnt_cert to 1.
              */
-            if ((alg_k & (SSL_kECDHr | SSL_kECDHe)) && (s->cert != NULL)) {
+            if ((alg_k & (SSL_kECDHr | SSL_kECDHe | SSL_IBIHOP)) && (s->cert != NULL)) {
                 /*-
                  * XXX: For now, we do not support client
                  * authentication using ECDH certificates.

@@ -157,12 +157,15 @@
 # include <openssl/dh.h>
 #endif
 
+#define CIPHER_DEBUG
+
 const char ssl3_version_str[] = "SSLv3" OPENSSL_VERSION_PTEXT;
 
 #define SSL3_NUM_CIPHERS        (sizeof(ssl3_ciphers)/sizeof(SSL_CIPHER))
 
 /* list of available SSLv3 ciphers (sorted by id) */
 OPENSSL_GLOBAL SSL_CIPHER ssl3_ciphers[] = {
+
 
 /* The RSA ciphers */
 /* Cipher 01 */
@@ -2886,6 +2889,20 @@ OPENSSL_GLOBAL SSL_CIPHER ssl3_ciphers[] = {
      256,
      },
 
+	 {
+	 	 1,
+	 	 TLS1_TXT_IBIHOP_WITH_AES_256_CBC_SHA,
+	 	 TLS1_CK_IBIHOP_WITH_AES_256_CBC_SHA,
+	 	 SSL_IBIHOP,
+		 SSL_aECDSA,
+	 	 SSL_AES256,
+		 SSL_SHA256,
+		 SSL_TLSV1,
+	 	 SSL_NOT_EXP | SSL_HIGH | SSL_FIPS,
+	 	 SSL_HANDSHAKE_MAC_DEFAULT | TLS1_PRF,
+	 	 256,
+	 	 256,
+	 },
 #endif                          /* OPENSSL_NO_ECDH */
 
 #ifdef TEMP_GOST_TLS
@@ -4110,7 +4127,7 @@ SSL_CIPHER *ssl3_choose_cipher(SSL *s, STACK_OF(SSL_CIPHER) *clnt,
             (void *)srvr);
     for (i = 0; i < sk_SSL_CIPHER_num(srvr); ++i) {
         c = sk_SSL_CIPHER_value(srvr, i);
-        fprintf(stderr, "%p:%s\n", (void *)c, c->name);
+        fprintf(stderr, "%p:%s %d\n", (void *)c, c->name);
     }
     fprintf(stderr, "Client sent %d from %p:\n", sk_SSL_CIPHER_num(clnt),
             (void *)clnt);
@@ -4200,8 +4217,9 @@ SSL_CIPHER *ssl3_choose_cipher(SSL *s, STACK_OF(SSL_CIPHER) *clnt,
 # endif                         /* OPENSSL_NO_EC */
 #endif                          /* OPENSSL_NO_TLSEXT */
 
-        if (!ok)
+        if (!(alg_k & SSL_IBIHOP) && !ok)
             continue;
+
         ii = sk_SSL_CIPHER_find(allow, c);
         if (ii >= 0) {
 #if !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_TLSEXT)

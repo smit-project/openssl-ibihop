@@ -339,6 +339,7 @@
 /* SRP auth */
 # define SSL_aSRP                0x00000400L
 
+# define SSL_IBIHOP				 0x00000800L
 /* Bits for algorithm_enc (symmetric encryption) */
 # define SSL_DES                 0x00000001L
 # define SSL_3DES                0x00000002L

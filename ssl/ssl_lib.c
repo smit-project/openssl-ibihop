@@ -1583,6 +1583,8 @@ STACK_OF(SSL_CIPHER) *ssl_bytes_to_cipher_list(SSL *s, unsigned char *p,
         }
 
         c = ssl_get_cipher_by_char(s, p);
+
+
         p += n;
         if (c != NULL) {
             if (!sk_SSL_CIPHER_push(sk, c)) {

@@ -1091,6 +1091,15 @@ int ssl3_client_hello(SSL *s)
             p += s->d1->cookie_len;
         }
 
+        STACK_OF(SSL_CIPHER) *sk = SSL_get_ciphers(s);
+        printf("PRINTING CIPHERS %d:\n", sk_SSL_CIPHER_num(sk));
+        SSL_CIPHER *c;
+        for (i = 0; i < sk_SSL_CIPHER_num(sk); i++) {
+			c = sk_SSL_CIPHER_value(sk, i);
+			printf("%s %d\n\n", c->name, c->id);
+		}
+
+
         /* Ciphers supported */
         i = ssl_cipher_list_to_bytes(s, SSL_get_ciphers(s), &(p[2]), 0);
         if (i == 0) {

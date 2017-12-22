@@ -1522,6 +1522,11 @@ STACK_OF(SSL_CIPHER) *ssl_create_cipher_list(const SSL_METHOD *ssl_method, STACK
      * Everything else being equal, prefer ephemeral ECDH over other key
      * exchange mechanisms
      */
+    ssl_cipher_apply_rule(0, SSL_IBIHOP, 0, 0, 0, 0, 0, CIPHER_ADD, -1, &head,
+                              &tail);
+    ssl_cipher_apply_rule(0, SSL_IBIHOP, 0, 0, 0, 0, 0, CIPHER_DEL, -1, &head,
+                              &tail);
+
     ssl_cipher_apply_rule(0, SSL_kEECDH, 0, 0, 0, 0, 0, CIPHER_ADD, -1, &head,
                           &tail);
     ssl_cipher_apply_rule(0, SSL_kEECDH, 0, 0, 0, 0, 0, CIPHER_DEL, -1, &head,
@@ -1633,6 +1638,7 @@ STACK_OF(SSL_CIPHER) *ssl_create_cipher_list(const SSL_METHOD *ssl_method, STACK
      * The cipher selection for the list is done. The ciphers are added
      * to the resulting precedence to the STACK_OF(SSL_CIPHER).
      */
+
     for (curr = head; curr != NULL; curr = curr->next) {
 #ifdef OPENSSL_FIPS
         if (curr->active

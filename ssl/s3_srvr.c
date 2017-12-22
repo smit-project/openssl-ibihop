@@ -1537,6 +1537,14 @@ int ssl3_get_client_hello(SSL *s)
     }
     p += i;
 
+
+	printf("PRINTING CIPHERS %d:\n", sk_SSL_CIPHER_num(ciphers));
+	for (i = 0; i < sk_SSL_CIPHER_num(ciphers); i++) {
+		c = sk_SSL_CIPHER_value(ciphers, i);
+		printf("%s\n\n", c->name);
+	}
+
+
     /* If it is a hit, check that the cipher is in the list */
     if (s->hit) {
         j = 0;
@@ -3812,7 +3820,7 @@ int ssl3_send_server_certificate(SSL *s)
 
     if (s->state == SSL3_ST_SW_CERT_A) {
         cpk = ssl_get_server_send_pkey(s);
-        if (cpk == NULL) {
+        if (cpk == NULL && !(s->s3->tmp.new_cipher->algorithm_mkey & SSL_IBIHOP)) {
             /* VRS: allow null cert if auth == KRB5 */
             if ((s->s3->tmp.new_cipher->algorithm_auth != SSL_aKRB5) ||
                 (s->s3->tmp.new_cipher->algorithm_mkey & SSL_kKRB5)) {

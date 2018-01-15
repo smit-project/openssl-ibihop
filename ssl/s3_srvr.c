@@ -858,6 +858,7 @@ int ssl3_accept(SSL *s)
 #endif
                 || (alg_k & SSL_kEDH)
                 || (alg_k & SSL_kEECDH)
+			    || (alg_k & SSL_IBIHOP)
                 || ((alg_k & SSL_kRSA)
                     && (s->cert->pkeys[SSL_PKEY_RSA_ENC].privatekey == NULL
                         || (SSL_C_IS_EXPORT(s->s3->tmp.new_cipher)
@@ -2121,7 +2122,7 @@ int ssl3_send_server_key_exchange(SSL *s)
         } else
 #endif
 #ifndef OPENSSL_NO_ECDH
-        if (type & SSL_kEECDH) {
+        if ( (type & SSL_kEECDH) || (type & SSL_IBIHOP)) {
             const EC_GROUP *group;
 
             if (s->s3->tmp.ecdh != NULL) {

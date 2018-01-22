@@ -157,8 +157,6 @@
 # include <openssl/dh.h>
 #endif
 
-#define CIPHER_DEBUG
-
 const char ssl3_version_str[] = "SSLv3" OPENSSL_VERSION_PTEXT;
 
 #define SSL3_NUM_CIPHERS        (sizeof(ssl3_ciphers)/sizeof(SSL_CIPHER))
@@ -4217,11 +4215,18 @@ SSL_CIPHER *ssl3_choose_cipher(SSL *s, STACK_OF(SSL_CIPHER) *clnt,
 # endif                         /* OPENSSL_NO_EC */
 #endif                          /* OPENSSL_NO_TLSEXT */
 
-        if (!(alg_k & SSL_IBIHOP) && !ok)
-            continue;
+//        if (alg_k & SSL_IBIHOP) {
+//        	printf("IS IBIHOP\n\n\n");
+//            ok = 1;
+//        }
 
         ii = sk_SSL_CIPHER_find(allow, c);
         if (ii >= 0) {
+
+        	if (alg_k & SSL_IBIHOP) {
+				ok = 1;
+			}
+
 #if !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_TLSEXT)
             if ((alg_k & SSL_kEECDH) && (alg_a & SSL_aECDSA)
                 && s->s3->is_probably_safari) {

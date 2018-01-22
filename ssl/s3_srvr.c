@@ -836,6 +836,7 @@ int ssl3_accept(SSL *s)
              */
             s->s3->tmp.use_rsa_tmp = 0;
 
+
             /*
              * only send if a DH key exchange, fortezza or RSA but we have a
              * sign only certificate PSK: may send PSK identity hints For
@@ -869,6 +870,7 @@ int ssl3_accept(SSL *s)
                     )
                 )
                 ) {
+
                 ret = ssl3_send_server_key_exchange(s);
                 if (ret <= 0)
                     goto end;
@@ -1539,11 +1541,11 @@ int ssl3_get_client_hello(SSL *s)
     p += i;
 
 
-	printf("PRINTING CIPHERS %d:\n", sk_SSL_CIPHER_num(ciphers));
-	for (i = 0; i < sk_SSL_CIPHER_num(ciphers); i++) {
-		c = sk_SSL_CIPHER_value(ciphers, i);
-		printf("%s\n\n", c->name);
-	}
+//	printf("PRINTING CIPHERS %d:\n", sk_SSL_CIPHER_num(ciphers));
+//	for (i = 0; i < sk_SSL_CIPHER_num(ciphers); i++) {
+//		c = sk_SSL_CIPHER_value(ciphers, i);
+//		printf("%s\n\n", c->name);
+//	}
 
 
     /* If it is a hit, check that the cipher is in the list */
@@ -2144,6 +2146,8 @@ int ssl3_send_server_key_exchange(SSL *s)
                                              SSL_C_EXPORT_PKEYLENGTH(s->
                                                                      s3->tmp.new_cipher));
             }
+
+            printf("execute ssl3_send_server_key_exchange\n\n\n");
             if (ecdhp == NULL) {
                 al = SSL_AD_HANDSHAKE_FAILURE;
                 SSLerr(SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE,

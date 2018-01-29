@@ -859,7 +859,6 @@ int ssl3_accept(SSL *s)
 #endif
                 || (alg_k & SSL_kEDH)
                 || (alg_k & SSL_kEECDH)
-			    || (alg_k & SSL_IBIHOP)
                 || ((alg_k & SSL_kRSA)
                     && (s->cert->pkeys[SSL_PKEY_RSA_ENC].privatekey == NULL
                         || (SSL_C_IS_EXPORT(s->s3->tmp.new_cipher)

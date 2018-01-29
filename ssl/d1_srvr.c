@@ -501,12 +501,6 @@ int dtls1_accept(SSL *s)
              */
             s->s3->tmp.use_rsa_tmp = 0;
 
-
-            if(alg_k & SSL_IBIHOP) {
-            	printf("IBIHOP\n\n\n");
-            } else {
-            	printf("NOT IBIHOP\n\n\n");
-            }
             /*
              * only send if a DH key exchange or RSA but we have a sign only
              * certificate
@@ -517,7 +511,6 @@ int dtls1_accept(SSL *s)
                  * provided
                  */
 #ifndef OPENSSL_NO_PSK
-            	||	(alg_k & SSL_IBIHOP)
 
                 || ((alg_k & SSL_kPSK) && s->ctx->psk_identity_hint)
 #endif
@@ -539,7 +532,6 @@ int dtls1_accept(SSL *s)
                     goto end;
             } else {
                 skip = 1;
-                printf("SKIP\n\n\n");
             }
             s->state = SSL3_ST_SW_CERT_REQ_A;
             s->init_num = 0;

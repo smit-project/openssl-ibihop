@@ -2136,6 +2136,8 @@ int ssl3_get_certificate_request(SSL *s)
         goto err;
     }
 
+
+
     /* get the certificate types */
     ctype_num = *(p++);
     if (s->cert->ctypes) {
@@ -2156,6 +2158,10 @@ int ssl3_get_certificate_request(SSL *s)
     for (i = 0; i < ctype_num; i++)
         s->s3->tmp.ctype[i] = p[i];
     p += p[-1];
+
+        int mynum = *(p++);
+        printf("mynum: %d\n\n", mynum);
+
     if (SSL_USE_SIGALGS(s)) {
         n2s(p, llen);
         /*
@@ -2247,6 +2253,8 @@ int ssl3_get_certificate_request(SSL *s)
         p += l;
         nc += l + 2;
     }
+
+
 
     if (0) {
  cont:

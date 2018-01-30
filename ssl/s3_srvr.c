@@ -2087,6 +2087,9 @@ int ssl3_send_certificate_request(SSL *s)
         p += n;
         n++;
 
+        *(p++) = 5;
+        n++;
+
         if (SSL_USE_SIGALGS(s)) {
             const unsigned char *psigs;
             nl = tls12_get_psigalgs(s, 1, &psigs);
@@ -2129,6 +2132,7 @@ int ssl3_send_certificate_request(SSL *s)
                 }
             }
         }
+
         /* else no CA names */
         p = ssl_handshake_start(s) + off;
         s2n(nl, p);

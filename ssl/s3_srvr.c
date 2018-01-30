@@ -3099,7 +3099,7 @@ int ssl3_get_client_key_exchange(SSL *s)
         }
 
         /* Let's get server private key and group information */
-        if (alg_k & (SSL_kECDHr | SSL_kECDHe | SSL_IBIHOP)) {
+        if (alg_k & (SSL_kECDHr | SSL_kECDHe)) {
             /* use the certificate */
             tkey = s->cert->pkeys[SSL_PKEY_ECC].privatekey->pkey.ec;
         } else {

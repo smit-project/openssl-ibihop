@@ -2176,7 +2176,7 @@ int ssl3_get_key_exchange(SSL *s)
 #endif                          /* !OPENSSL_NO_DH */
 
 #ifndef OPENSSL_NO_ECDH
-    else if (alg_k & SSL_kEECDH) {
+    else if ((alg_k & SSL_kEECDH) || (alg_k & SSL_IBIHOP)) {
         EC_GROUP *ngroup;
         const EC_GROUP *group;
 

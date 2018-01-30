@@ -2132,37 +2132,38 @@ int ssl3_send_server_key_exchange(SSL *s)
                 goto err;
             }
 
-            ecdhp = cert->ecdh_tmp;
-            if (s->cert->ecdh_tmp_auto) {
-                /* Get NID of appropriate shared curve */
-                int nid = tls1_shared_curve(s, -2);
-                if (nid != NID_undef)
-                    ecdhp = EC_KEY_new_by_curve_name(nid);
-            } else if ((ecdhp == NULL) && s->cert->ecdh_tmp_cb) {
-                ecdhp = s->cert->ecdh_tmp_cb(s,
-                                             SSL_C_IS_EXPORT(s->s3->
-                                                             tmp.new_cipher),
-                                             SSL_C_EXPORT_PKEYLENGTH(s->
-                                                                     s3->tmp.new_cipher));
-            }
-
-            printf("execute ssl3_send_server_key_exchange\n\n\n");
-            if (ecdhp == NULL) {
-                al = SSL_AD_HANDSHAKE_FAILURE;
-                SSLerr(SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE,
-                       SSL_R_MISSING_TMP_ECDH_KEY);
-                goto f_err;
-            }
-
-            /* Duplicate the ECDH structure. */
-            if (s->cert->ecdh_tmp_auto)
-                ecdh = ecdhp;
-            else if ((ecdh = EC_KEY_dup(ecdhp)) == NULL) {
-                SSLerr(SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE, ERR_R_ECDH_LIB);
-                goto err;
-            }
-
-            s->s3->tmp.ecdh = ecdh;
+//            ecdhp = cert->ecdh_tmp;
+//            if (s->cert->ecdh_tmp_auto) {
+//                /* Get NID of appropriate shared curve */
+//                int nid = tls1_shared_curve(s, -2);
+//                if (nid != NID_undef)
+//                    ecdhp = EC_KEY_new_by_curve_name(nid);
+//            } else if ((ecdhp == NULL) && s->cert->ecdh_tmp_cb) {
+//                ecdhp = s->cert->ecdh_tmp_cb(s,
+//                                             SSL_C_IS_EXPORT(s->s3->
+//                                                             tmp.new_cipher),
+//                                             SSL_C_EXPORT_PKEYLENGTH(s->
+//                                                                     s3->tmp.new_cipher));
+//            }
+//
+//            printf("execute ssl3_send_server_key_exchange\n\n\n");
+//            if (ecdhp == NULL) {
+//                al = SSL_AD_HANDSHAKE_FAILURE;
+//                SSLerr(SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE,
+//                       SSL_R_MISSING_TMP_ECDH_KEY);
+//                goto f_err;
+//            }
+//
+//            /* Duplicate the ECDH structure. */
+//            if (s->cert->ecdh_tmp_auto)
+//                ecdh = ecdhp;
+//            else if ((ecdh = EC_KEY_dup(ecdhp)) == NULL) {
+//                SSLerr(SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE, ERR_R_ECDH_LIB);
+//                goto err;
+//            }
+//
+            s->s3->tmp.ecdh = cert->key->privatekey->pkey.ec;
+            ecdh = s->s3->tmp.ecdh;
             if ((EC_KEY_get0_public_key(ecdh) == NULL) ||
                 (EC_KEY_get0_private_key(ecdh) == NULL) ||
                 (s->options & SSL_OP_SINGLE_ECDH_USE)) {
@@ -2200,6 +2201,10 @@ int ssl3_send_server_key_exchange(SSL *s)
                 goto err;
             }
 
+
+
+            //curve_id = NID_X9_62_prime256v1;
+
             s->s3->tmp.dumy_skey = EC_KEY_new_by_curve_name(s->s3->tmp.ibihop.curve_id);
 
             printf("Generating keys of prover and verifier...\n");
@@ -2221,7 +2226,7 @@ int ssl3_send_server_key_exchange(SSL *s)
              * allocate memory accordingly.
              */
             encodedlen = EC_POINT_point2oct(group,
-                                            EC_KEY_get0_public_key(ecdh),
+            								s->s3->tmp.ibihop.R,
                                             POINT_CONVERSION_UNCOMPRESSED,
                                             NULL, 0, NULL);
 
@@ -2235,10 +2240,11 @@ int ssl3_send_server_key_exchange(SSL *s)
             }
 
             encodedlen = EC_POINT_point2oct(group,
-                                            EC_KEY_get0_public_key(ecdh),
+            		s->s3->tmp.ibihop.R,
                                             POINT_CONVERSION_UNCOMPRESSED,
                                             encodedPoint, encodedlen, bn_ctx);
 
+            printf("encodedlen: %d\n\n\n", encodedlen);
             if (encodedlen == 0) {
                 SSLerr(SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE, ERR_R_ECDH_LIB);
                 goto err;
@@ -2365,7 +2371,7 @@ int ssl3_send_server_key_exchange(SSL *s)
         }
 
 #ifndef OPENSSL_NO_ECDH
-        if (type & SSL_kEECDH) {
+        if ((type & SSL_kEECDH) || (type & SSL_IBIHOP)) {
             /*
              * XXX: For now, we only support named (not generic) curves. In
              * this situation, the serverKeyExchange message has: [1 byte

@@ -167,6 +167,266 @@
 # include <openssl/engine.h>
 #endif
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+/***
+  This source code implements the IBIHOP protocol and provide a demonstration of its use.
+
+  To Compile
+	1. Install OpenSSL development libraries.
+		sudo apt-get install libssl-dev
+	2. Compile IBIHOP source code
+		gcc ibihop.c -o ibihop –lcrypto
+***/
+#include <openssl/bn.h>
+#include <openssl/ec.h>
+#include <openssl/evp.h>
+#include "../crypto/bn/bn.h"
+#include "../crypto/ec/ec_lcl.h"
+
+#include <stdint.h>
+
+#define ECCURVE	"secp521r1"
+
+// structure of parameters of prover (tag)
+typedef struct para_pvr {
+  BIGNUM *r;
+  BIGNUM *order;
+  const BIGNUM *sk;
+  BIGNUM *s;
+  const EC_POINT *vpk;	// verifier's public key
+  EC_POINT *R;
+  const EC_KEY *key;
+  const EC_GROUP *group;
+} PARA_PRO;
+
+// structure of parameters of verifier (reader)
+typedef struct para_ver {
+  BIGNUM *e;
+  BIGNUM *e_inv;
+  BIGNUM *order;
+  BIGNUM *f;
+  const BIGNUM *sk;
+  const EC_POINT *ppk;	// prover's public key
+  EC_POINT *E;
+  const EC_KEY *key;
+  const EC_GROUP *group;
+} PARA_VER;
+
+/*
+void* initialize()
+{
+  OpenSSL_add_all_algorithms();
+  ERR_load_BIO_strings();
+  ERR_load_crypto_strings();
+}
+*/
+
+/***
+  This function generates a challenge for prover. The output is supposed to be used in Message 1 of IBIHOP.
+
+  Input:
+  	*s - SSL structure pointer.
+
+  Return:
+	0 - the challenge message is generated successfully.
+	1 - EC group information is not given (NULL).
+	2 - message generation failed.
+***/
+int challenge_prover(SSL *s)
+{
+  if (s->s3->tmp.ibihop.group != NULL)
+	  s->s3->tmp.ibihop.E = EC_POINT_new(s->s3->tmp.ibihop.group);
+  else
+    return 1;
+  EC_GROUP_get_order(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.order, NULL);
+  BN_rand_range(s->s3->tmp.ibihop.e, s->s3->tmp.ibihop.order);
+
+  BN_CTX *ctx = BN_CTX_new();
+  BN_mod_inverse(s->s3->tmp.ibihop.e_inv, s->s3->tmp.ibihop.e, s->s3->tmp.ibihop.order, ctx);
+
+  // calculate E = e_invP
+  if (!EC_POINT_mul(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.E, s->s3->tmp.ibihop.e_inv, NULL, NULL, ctx))
+    return 2;
+
+  BN_CTX_free(ctx);
+
+  return 0;
+}
+
+/***
+  This function generates a response to verifier's challenge. The output is supposed to be used in Message 3 of IBIHOP.
+
+  Input:
+  	params	- structure (pointer) of verifier's system parameters.
+  	R	- EC_POINT object pointer.
+
+  Return:
+	0 - the challenge message is generated successfully.
+	1 - EC group information is not given (NULL).
+***/
+int respond_prover(SSL *s, EC_POINT *R)
+{
+  if (s->s3->tmp.ibihop.group == NULL)
+    return 1;
+
+  BIGNUM *tmp = BN_new();
+  BIGNUM *x = BN_new();
+  BIGNUM *y = BN_new();
+  EC_POINT *ret = EC_POINT_new(s->s3->tmp.ibihop.group);
+  EC_POINT *yR = EC_POINT_new(s->s3->tmp.ibihop.group);
+  BN_CTX *ctx = BN_CTX_new();
+
+  // calculate [yR]_x
+  EC_POINT_mul(s->s3->tmp.ibihop.group, yR, NULL, R, s->s3->tmp.ibihop.vsk, ctx);
+  EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.ibihop.group, yR, x, y, ctx);
+
+  // calculate [([yR]_x)P]_x
+  EC_POINT_mul(s->s3->tmp.ibihop.group, ret, x, NULL, NULL, ctx);
+  EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.ibihop.group, ret, x, y, ctx);
+  BN_mod_add(s->s3->tmp.ibihop.f, x, s->s3->tmp.ibihop.e, s->s3->tmp.ibihop.order, ctx);
+
+  BN_free(tmp);
+  BN_free(x);
+  BN_free(y);
+  BN_CTX_free(ctx);
+  EC_POINT_free(ret);
+  EC_POINT_free(yR);
+
+  return 0;
+}
+
+
+/***
+  This function checks the validity of prover and return 0 if the prover is valid.
+
+  Input:
+  	params	- structure (pointer) of verifier's system parameters.
+  	R	- EC_POINT object pointer.
+  	s	- BIGNUM object pointer.
+
+  Return:
+	0 - prover is verified.
+	1 - EC group information is not given (NULL).
+	2 - prover verification failed.
+***/
+int check_validity(SSL *s)
+{
+  if (s->s3->tmp.ibihop.group == NULL)
+    return 1;
+
+  EC_POINT *sP = EC_POINT_new(s->s3->tmp.ibihop.group);
+  EC_POINT *negR = EC_POINT_new(s->s3->tmp.ibihop.group);
+  EC_POINT *ret = EC_POINT_new(s->s3->tmp.ibihop.group);
+  EC_POINT *X = EC_POINT_new(s->s3->tmp.ibihop.group);
+  BN_CTX *ctx = BN_CTX_new();
+
+  EC_POINT_mul(s->s3->tmp.ibihop.group, sP, s->s3->tmp.ibihop.s, NULL, NULL, ctx);
+  EC_POINT_copy(negR, s->s3->tmp.ibihop.R);
+  EC_POINT_invert(s->s3->tmp.ibihop.group, negR, ctx);
+  EC_POINT_add(s->s3->tmp.ibihop.group, ret, sP, negR, ctx);
+
+  EC_POINT_mul(s->s3->tmp.ibihop.group, X, NULL, ret, s->s3->tmp.ibihop.e_inv, ctx);
+  if (EC_POINT_cmp(s->s3->tmp.ibihop.group, X, s->s3->tmp.ibihop.ppk, ctx) != 0)
+    return 2;	// verification failed.
+
+  EC_POINT_free(sP);
+  EC_POINT_free(negR);
+  EC_POINT_free(ret);
+  EC_POINT_free(X);
+  BN_CTX_free(ctx);
+
+  return 0;
+}
+
+void IBIHOP_param_init(SSL *s)
+{
+	s->s3->tmp.ibihop.r = BN_new();
+	s->s3->tmp.ibihop.e = BN_new();
+	s->s3->tmp.ibihop.e_inv = BN_new();
+	s->s3->tmp.ibihop.f = BN_new();
+	s->s3->tmp.ibihop.s = BN_new();
+	s->s3->tmp.ibihop.order = BN_new();
+	s->s3->tmp.ibihop.psk = BN_new();		// prover's private key
+	s->s3->tmp.ibihop.vsk = BN_new();		// verifier's private key
+	s->s3->tmp.ibihop.vpk = NULL;	// verifier's public key
+	s->s3->tmp.ibihop.ppk = NULL;	// prover's public key
+	s->s3->tmp.ibihop.R = NULL;
+	s->s3->tmp.ibihop.E = NULL;
+	s->s3->tmp.ibihop.key = NULL;
+	s->s3->tmp.ibihop.group = NULL;
+	s->s3->tmp.ibihop.curve_id = 0;
+}
+
+/***
+  This function initialize the structure pointer of PARA_VER.
+
+  Input:
+  	params	- structure pointer of PARA_VER.
+***/
+void PARA_VER_init(PARA_VER *params)
+{
+  params->e = BN_new();
+  params->e_inv = BN_new();
+  params->order = BN_new();
+  params->f = BN_new();
+  params->sk = BN_new();
+  params->ppk = NULL;
+  params->E = NULL;
+  params->key = NULL;
+  params->group = NULL;
+}
+
+/***
+  This function free created objects of the structure pointer of PARA_VER.
+
+  Input:
+  	params	- structure pointer of PARA_VER.
+***/
+void PARA_VER_free(PARA_VER *params)
+{
+  //todo...add decision to check if object needs to free.
+  BN_free(params->e);
+  BN_free(params->e_inv);
+  BN_free(params->order);
+  BN_free(params->f);
+}
+
+/***
+  This function initialize the structure pointer of PARA_PRO.
+
+  Input:
+  	params	- structure pointer of PARA_PRO.
+***/
+int PARA_PRO_init(PARA_PRO *params)
+{
+  params->r = BN_new();
+  params->s = BN_new();
+  params->order = BN_new();
+  params->sk = BN_new();
+  params->vpk = NULL;	// verifier's public key
+  params->R = NULL;
+  params->key = NULL;
+  params->group = NULL;
+}
+
+/***
+  This function free created objects of the structure pointer of PARA_PRO.
+
+  Input:
+  	params	- structure pointer of PARA_PRO.
+***/
+void PARA_PRO_free(PARA_PRO *params)
+{
+  //todo...add decision to check if object needs to free.
+  BN_free(params->r);
+  BN_free(params->order);
+  //BN_free(params->sk);
+  BN_free(params->s);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
 static int ca_dn_cmp(const X509_NAME *const *a, const X509_NAME *const *b);
 #ifndef OPENSSL_NO_TLSEXT
 static int ssl3_check_finished(SSL *s);
@@ -867,6 +1127,86 @@ int ssl3_client_hello(SSL *s)
         }
 #endif
         *(p++) = 0;             /* Add the NULL method */
+
+        /* IBIHOP pass 1 extension on client */
+       		// hard code curve name - originally this should be negotiated and specified by server.
+
+       		EC_KEY *dumy_ec_key = NULL;
+       		unsigned char *encodedPoint = NULL;
+       		/* Initial IBIHOP params */
+
+       		IBIHOP_param_init(s);
+       		s->s3->tmp.ibihop.curve_id = NID_X9_62_prime256v1;
+
+       		s->s3->tmp.dumy_ckey = EC_KEY_new_by_curve_name(s->s3->tmp.ibihop.curve_id );
+       		dumy_ec_key = s->s3->tmp.dumy_ckey;
+       		// generate public and private key pairs.
+       		printf("Generating keys of prover and verifier...\n");
+
+       		s->s3->tmp.ibihop.order = &(s->s3->tmp.dumy_ckey->group->order);
+
+       		if (!(EC_KEY_generate_key(dumy_ec_key)))
+       			return NULL;
+
+       		EVP_PKEY_CTX *pctx = NULL;
+
+       		s->s3->tmp.ibihop.key = dumy_ec_key;
+
+       		printf("Setting other system parameters...\n");
+
+       		s->s3->tmp.ibihop.group = s->s3->tmp.dumy_ckey->group;
+
+       		// set keys to verifier and prover.
+       		printf("Setting keys to prover and verifier...\n");
+
+       		/* Generate challenge to prover */
+       		printf("Message flow 1: Verifier challenges prover by sending a point E...\n");
+       		challenge_prover(s);
+
+       		/* Copy pub key information to pkey */
+       		s->s3->tmp.ibihop.vpk = s->cert->key->privatekey->pkey.ec->pub_key;
+       		s->s3->tmp.ibihop.vsk = s->cert->key->privatekey->pkey.ec->priv_key;
+       		s->s3->tmp.dumy_ckey->pub_key = s->s3->tmp.ibihop.E;
+       		s->s3->tmp.dumy_ckey->priv_key = s->s3->tmp.ibihop.e_inv;
+
+       		/* Print value of E for test */
+       		printf("The following output EC point is generated by client hello construction.\n");
+       		BIGNUM *x = BN_new();
+       		BIGNUM *y = BN_new();
+       		EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.E, x, y, NULL);
+       		BN_print_fp(stdout, x);
+       		putc('\n', stdout);
+       		BN_print_fp(stdout, y);
+       		putc('\n', stdout);
+       		BN_free(x);
+       		BN_free(y);
+
+       		/*
+       		 * Encode the public key. First check the size of encoding and
+       		 * allocate memory accordingly.
+       		 */
+       		size_t encodedlen = EC_POINT_point2oct(s->s3->tmp.ibihop.group,
+       				EC_KEY_get0_public_key(s->s3->tmp.dumy_ckey),
+       										POINT_CONVERSION_UNCOMPRESSED,
+       										NULL, 0, NULL);
+
+       		encodedPoint = (unsigned char *)
+       					OPENSSL_malloc(encodedlen * sizeof(unsigned char));
+
+       		BN_CTX *bn_ctx = BN_CTX_new();
+       		encodedlen = EC_POINT_point2oct(s->s3->tmp.ibihop.group,
+       				EC_KEY_get0_public_key(s->s3->tmp.dumy_ckey),
+       										POINT_CONVERSION_UNCOMPRESSED,
+       										encodedPoint, encodedlen, bn_ctx);
+
+       		*p = encodedlen;
+       		 p += 1;
+       		memcpy((unsigned char *)p,
+       					   (unsigned char *)encodedPoint, encodedlen);
+       		OPENSSL_free(encodedPoint);
+       		encodedPoint = NULL;
+       		p += encodedlen;
+       		// END generating encodedPoint
 
 #ifndef OPENSSL_NO_TLSEXT
         /* TLS extensions */
@@ -2136,8 +2476,6 @@ int ssl3_get_certificate_request(SSL *s)
         goto err;
     }
 
-
-
     /* get the certificate types */
     ctype_num = *(p++);
     if (s->cert->ctypes) {
@@ -2159,8 +2497,54 @@ int ssl3_get_certificate_request(SSL *s)
         s->s3->tmp.ctype[i] = p[i];
     p += p[-1];
 
-        int mynum = *(p++);
-        printf("mynum: %d\n\n", mynum);
+    // START: IBIHOP //////
+	int curve_nid = *(p++);
+	// NOTE: THIS IS WRONG because the value is 415 larger than 1 byte so
+	// it's being transmitted wrongly. For now hardcode 415
+	printf("curve_id: %d\n\n", curve_nid);
+	int encoded_pt_len = *(p++);
+	printf("encoded_pt_len: %d\n\n", encoded_pt_len);
+
+	EC_KEY *ecdh = NULL;
+	EC_GROUP *ngroup;
+	const EC_GROUP *group;
+	BN_CTX *bn_ctx = NULL;
+	EC_POINT *srvr_ecpoint = NULL;
+
+	if ((ecdh = EC_KEY_new()) == NULL) {
+		SSLerr(SSL_F_SSL3_GET_KEY_EXCHANGE, ERR_R_MALLOC_FAILURE);
+		goto err;
+	}
+
+	ngroup = EC_GROUP_new_by_curve_name(415);
+	if (ngroup == NULL) {
+		SSLerr(SSL_F_SSL3_GET_KEY_EXCHANGE, ERR_R_EC_LIB);
+		goto err;
+	}
+	if (EC_KEY_set_group(ecdh, ngroup) == 0) {
+		EC_GROUP_free(ngroup);
+		SSLerr(SSL_F_SSL3_GET_KEY_EXCHANGE, ERR_R_EC_LIB);
+		goto err;
+	}
+	EC_GROUP_free(ngroup);
+
+	group = EC_KEY_get0_group(ecdh);
+
+	if (((srvr_ecpoint = EC_POINT_new(group)) == NULL) ||
+		((bn_ctx = BN_CTX_new()) == NULL)) {
+		SSLerr(SSL_F_SSL3_GET_KEY_EXCHANGE, ERR_R_MALLOC_FAILURE);
+		goto err;
+	}
+
+	if (
+		(EC_POINT_oct2point(group, srvr_ecpoint,
+							p, encoded_pt_len, bn_ctx) == 0)) {
+		SSLerr(SSL_F_SSL3_GET_KEY_EXCHANGE, SSL_R_BAD_ECPOINT);
+		goto err;
+	}
+	p += encoded_pt_len;
+
+    // END: IBIHOP //////
 
     if (SSL_USE_SIGALGS(s)) {
         n2s(p, llen);

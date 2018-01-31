@@ -3244,6 +3244,16 @@ int ssl3_get_client_key_exchange(SSL *s)
                 goto err;
             }
 
+            // START: Read IBIHOP Pass 3 ////
+            int bn_len = *(p++);
+
+			BIGNUM *my_bn = BN_bin2bn(p, bn_len, NULL);
+			printf("pass 3 bn: %s\n", BN_bn2dec(my_bn));
+			printf("pass 3 bn_len: %d\n\n", bn_len);
+			p += bn_len;
+			n -= (1 + bn_len);
+			// END: Read IBIHOP Pass 3 ////
+
             /* Get encoded point length */
             i = *p;
             p += 1;
@@ -3276,6 +3286,8 @@ int ssl3_get_client_key_exchange(SSL *s)
             SSLerr(SSL_F_SSL3_GET_CLIENT_KEY_EXCHANGE, ERR_R_ECDH_LIB);
             goto err;
         }
+
+
 
         EVP_PKEY_free(clnt_pub_pkey);
         EC_POINT_free(clnt_ecpoint);
@@ -4005,6 +4017,7 @@ int ssl3_send_newsession_ticket(SSL *s)
             goto err;
 
         p = ssl_handshake_start(s);
+
         /*
          * Initialize HMAC and cipher contexts. If callback present it does
          * all the work otherwise use generated values from parent ctx.

@@ -162,8 +162,34 @@ int ssl3_send_finished(SSL *s, int a, int b, const char *sender, int slen)
     int i;
     unsigned long l;
 
+    int ibihop_data_len = 0;
     if (s->state == a) {
         p = ssl_handshake_start(s);
+        //*(p++) = 15;
+
+        // START: IBIHOP pass 4 server send //////
+        if(s->server == 1) {
+
+			BIGNUM *bn1 = NULL;
+			BN_dec2bn(&bn1, "12345678912345");
+
+			int num_bytes = BN_num_bytes(bn1);
+			unsigned char * my_bn = malloc((num_bytes) * sizeof(char));
+			int my_bn_len = BN_bn2bin(bn1, my_bn);
+
+			BIGNUM *bn2 = BN_bin2bn(my_bn, my_bn_len, NULL);
+			printf("server pass 4 bn: %s\n", BN_bn2dec(bn2));
+
+			printf("server pass 4 bn_len: %d\n", my_bn_len);
+			*(p++) = my_bn_len;
+			ibihop_data_len += 1;
+
+			memcpy((unsigned char *)p, my_bn, my_bn_len);
+			p += my_bn_len;
+			ibihop_data_len += my_bn_len;
+
+        }
+        // END: IBIHOP pass 4 server send //////
 
         i = s->method->ssl3_enc->final_finish_mac(s,
                                                   sender, slen,
@@ -194,7 +220,7 @@ int ssl3_send_finished(SSL *s, int a, int b, const char *sender, int slen)
          */
         l &= 0xffff;
 #endif
-        ssl_set_handshake_header(s, SSL3_MT_FINISHED, l);
+        ssl_set_handshake_header(s, SSL3_MT_FINISHED, l + ibihop_data_len);
         s->state = b;
     }
 
@@ -262,6 +288,20 @@ int ssl3_get_finished(SSL *s, int a, int b)
     p = (unsigned char *)s->init_msg;
     i = s->s3->tmp.peer_finish_md_len;
 
+    // START: ibihop pass 4 client receive ///
+    if(s->server == 0) {
+
+		int bn_len = *(p++);
+
+		BIGNUM *my_bn = BN_bin2bn(p, bn_len, NULL);
+		printf("client pass 4 bn: %s\n", BN_bn2dec(my_bn));
+		printf("client pass 4 bn_len: %d\n\n", bn_len);
+		p += bn_len;
+		n -= (1 + bn_len);
+
+
+    }
+    // END: ibihop pass 4 client receive ///
     if (i != n) {
         al = SSL_AD_DECODE_ERROR;
         SSLerr(SSL_F_SSL3_GET_FINISHED, SSL_R_BAD_DIGEST_LENGTH);

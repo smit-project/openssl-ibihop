@@ -3357,6 +3357,26 @@ int ssl3_send_client_key_exchange(SSL *s)
                     goto err;
                 }
 
+                // START: Send IBIHOP Pass 3 ////
+				BIGNUM *bn1 = NULL;
+				BN_dec2bn(&bn1, "12345678912345");
+
+	            // TEST BIGNUM convertion to bytes
+	            int num_bytes = BN_num_bytes(bn1);
+	            unsigned char * my_bn = malloc((num_bytes) * sizeof(char));
+	            int my_bn_len = BN_bn2bin(bn1, my_bn);
+
+	            BIGNUM *bn2 = BN_bin2bn(my_bn, my_bn_len, NULL);
+	            printf("pass 3 bn: %s\n", BN_bn2dec(bn2));
+
+	            printf("pass 3 bn_len: %d\n", my_bn_len);
+	            *(p++) = my_bn_len;
+
+	            memcpy((unsigned char *)p, my_bn, my_bn_len);
+	            p += my_bn_len;
+
+				// END: Send IBIHOP Pass 3 ////
+
                 /* Encode the public key */
                 n = EC_POINT_point2oct(srvr_group,
                                        EC_KEY_get0_public_key(clnt_ecdh),
@@ -3370,7 +3390,14 @@ int ssl3_send_client_key_exchange(SSL *s)
                 memcpy((unsigned char *)p, encodedPoint, n);
                 /* increment n to account for length field */
                 n += 1;
+
+                // START: Send IBIHOP Pass 3 ////
+                // For ibihop bignum length
+                n += (1 + my_bn_len);
+                // END: Send IBIHOP Pass 3 ////
             }
+
+
 
             /* Free allocated memory */
             BN_CTX_free(bn_ctx);

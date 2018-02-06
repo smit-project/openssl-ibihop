@@ -297,47 +297,47 @@ int respond_prover(SSL *s, EC_POINT *R)
 }
 
 
-/***
-  This function checks the validity of prover and return 0 if the prover is valid.
-
-  Input:
-  	params	- structure (pointer) of verifier's system parameters.
-  	R	- EC_POINT object pointer.
-  	s	- BIGNUM object pointer.
-
-  Return:
-	0 - prover is verified.
-	1 - EC group information is not given (NULL).
-	2 - prover verification failed.
-***/
-int check_validity(SSL *s)
-{
-  if (s->s3->tmp.ibihop.group == NULL)
-    return 1;
-
-  EC_POINT *sP = EC_POINT_new(s->s3->tmp.ibihop.group);
-  EC_POINT *negR = EC_POINT_new(s->s3->tmp.ibihop.group);
-  EC_POINT *ret = EC_POINT_new(s->s3->tmp.ibihop.group);
-  EC_POINT *X = EC_POINT_new(s->s3->tmp.ibihop.group);
-  BN_CTX *ctx = BN_CTX_new();
-
-  EC_POINT_mul(s->s3->tmp.ibihop.group, sP, s->s3->tmp.ibihop.s, NULL, NULL, ctx);
-  EC_POINT_copy(negR, s->s3->tmp.ibihop.R);
-  EC_POINT_invert(s->s3->tmp.ibihop.group, negR, ctx);
-  EC_POINT_add(s->s3->tmp.ibihop.group, ret, sP, negR, ctx);
-
-  EC_POINT_mul(s->s3->tmp.ibihop.group, X, NULL, ret, s->s3->tmp.ibihop.e_inv, ctx);
-  if (EC_POINT_cmp(s->s3->tmp.ibihop.group, X, s->s3->tmp.ibihop.ppk, ctx) != 0)
-    return 2;	// verification failed.
-
-  EC_POINT_free(sP);
-  EC_POINT_free(negR);
-  EC_POINT_free(ret);
-  EC_POINT_free(X);
-  BN_CTX_free(ctx);
-
-  return 0;
-}
+///***
+//  This function checks the validity of prover and return 0 if the prover is valid.
+//
+//  Input:
+//  	params	- structure (pointer) of verifier's system parameters.
+//  	R	- EC_POINT object pointer.
+//  	s	- BIGNUM object pointer.
+//
+//  Return:
+//	0 - prover is verified.
+//	1 - EC group information is not given (NULL).
+//	2 - prover verification failed.
+//***/
+//int check_validity(SSL *s)
+//{
+//  if (s->s3->tmp.ibihop.group == NULL)
+//    return 1;
+//
+//  EC_POINT *sP = EC_POINT_new(s->s3->tmp.ibihop.group);
+//  EC_POINT *negR = EC_POINT_new(s->s3->tmp.ibihop.group);
+//  EC_POINT *ret = EC_POINT_new(s->s3->tmp.ibihop.group);
+//  EC_POINT *X = EC_POINT_new(s->s3->tmp.ibihop.group);
+//  BN_CTX *ctx = BN_CTX_new();
+//
+//  EC_POINT_mul(s->s3->tmp.ibihop.group, sP, s->s3->tmp.ibihop.s, NULL, NULL, ctx);
+//  EC_POINT_copy(negR, s->s3->tmp.ibihop.R);
+//  EC_POINT_invert(s->s3->tmp.ibihop.group, negR, ctx);
+//  EC_POINT_add(s->s3->tmp.ibihop.group, ret, sP, negR, ctx);
+//
+//  EC_POINT_mul(s->s3->tmp.ibihop.group, X, NULL, ret, s->s3->tmp.ibihop.e_inv, ctx);
+//  if (EC_POINT_cmp(s->s3->tmp.ibihop.group, X, s->s3->tmp.ibihop.ppk, ctx) != 0)
+//    return 2;	// verification failed.
+//
+//  EC_POINT_free(sP);
+//  EC_POINT_free(negR);
+//  EC_POINT_free(ret);
+//  EC_POINT_free(X);
+//  BN_CTX_free(ctx);
+//
+//  return 0;
+//}
 
 void IBIHOP_param_init(SSL *s)
 {
@@ -1131,43 +1131,27 @@ int ssl3_client_hello(SSL *s)
         /* IBIHOP pass 1 extension on client */
        		// hard code curve name - originally this should be negotiated and specified by server.
 
-       		EC_KEY *dumy_ec_key = NULL;
        		unsigned char *encodedPoint = NULL;
        		/* Initial IBIHOP params */
 
        		IBIHOP_param_init(s);
        		s->s3->tmp.ibihop.curve_id = NID_X9_62_prime256v1;
-
-       		s->s3->tmp.dumy_ckey = EC_KEY_new_by_curve_name(s->s3->tmp.ibihop.curve_id );
-       		dumy_ec_key = s->s3->tmp.dumy_ckey;
-       		// generate public and private key pairs.
-       		printf("Generating keys of prover and verifier...\n");
-
-       		s->s3->tmp.ibihop.order = &(s->s3->tmp.dumy_ckey->group->order);
-
-       		if (!(EC_KEY_generate_key(dumy_ec_key)))
-       			return NULL;
+       		s->s3->tmp.ibihop.key = EC_KEY_new_by_curve_name(s->s3->tmp.ibihop.curve_id);
+       		s->s3->tmp.ibihop.order = &(s->s3->tmp.ibihop.key->group->order);
 
        		EVP_PKEY_CTX *pctx = NULL;
 
-       		s->s3->tmp.ibihop.key = dumy_ec_key;
-
-       		printf("Setting other system parameters...\n");
-
-       		s->s3->tmp.ibihop.group = s->s3->tmp.dumy_ckey->group;
-
-       		// set keys to verifier and prover.
-       		printf("Setting keys to prover and verifier...\n");
+       		s->s3->tmp.ibihop.group = s->s3->tmp.ibihop.key->group;
 
        		/* Generate challenge to prover */
        		printf("Message flow 1: Verifier challenges prover by sending a point E...\n");
        		challenge_prover(s);
 
        		/* Copy pub key information to pkey */
-       		s->s3->tmp.ibihop.vpk = s->cert->key->privatekey->pkey.ec->pub_key;
-       		s->s3->tmp.ibihop.vsk = s->cert->key->privatekey->pkey.ec->priv_key;
-       		s->s3->tmp.dumy_ckey->pub_key = s->s3->tmp.ibihop.E;
-       		s->s3->tmp.dumy_ckey->priv_key = s->s3->tmp.ibihop.e_inv;
+//       		s->s3->tmp.ibihop.vpk = s->cert->key->privatekey->pkey.ec->pub_key;
+//       		s->s3->tmp.ibihop.vsk = s->cert->key->privatekey->pkey.ec->priv_key;
+//       		s->s3->tmp.dumy_ckey->pub_key = s->s3->tmp.ibihop.E;
+//       		s->s3->tmp.dumy_ckey->priv_key = s->s3->tmp.ibihop.e_inv;
 
        		/* Print value of E for test */
        		printf("The following output EC point is generated by client hello construction.\n");
@@ -1186,18 +1170,18 @@ int ssl3_client_hello(SSL *s)
        		 * allocate memory accordingly.
        		 */
        		size_t encodedlen = EC_POINT_point2oct(s->s3->tmp.ibihop.group,
-       				EC_KEY_get0_public_key(s->s3->tmp.dumy_ckey),
-       										POINT_CONVERSION_UNCOMPRESSED,
-       										NULL, 0, NULL);
+       				s->s3->tmp.ibihop.E,
+					POINT_CONVERSION_UNCOMPRESSED,
+					NULL, 0, NULL);
 
        		encodedPoint = (unsigned char *)
        					OPENSSL_malloc(encodedlen * sizeof(unsigned char));
 
        		BN_CTX *bn_ctx = BN_CTX_new();
        		encodedlen = EC_POINT_point2oct(s->s3->tmp.ibihop.group,
-       				EC_KEY_get0_public_key(s->s3->tmp.dumy_ckey),
-       										POINT_CONVERSION_UNCOMPRESSED,
-       										encodedPoint, encodedlen, bn_ctx);
+       				s->s3->tmp.ibihop.E,
+					POINT_CONVERSION_UNCOMPRESSED,
+					encodedPoint, encodedlen, bn_ctx);
 
        		*p = encodedlen;
        		 p += 1;
@@ -2542,7 +2526,20 @@ int ssl3_get_certificate_request(SSL *s)
 		SSLerr(SSL_F_SSL3_GET_KEY_EXCHANGE, SSL_R_BAD_ECPOINT);
 		goto err;
 	}
+	s->s3->tmp.ibihop.R = srvr_ecpoint;
 	p += encoded_pt_len;
+
+	/* Print value of R (received) for test */
+	printf("The following output EC point (R) is received by get certificate request.\n");
+	BIGNUM *x = BN_new();
+	BIGNUM *y = BN_new();
+	EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.R, x, y, NULL);
+	BN_print_fp(stdout, x);
+	putc('\n', stdout);
+	BN_print_fp(stdout, y);
+	putc('\n', stdout);
+	BN_free(x);
+	BN_free(y);
 
     // END: IBIHOP //////
 
@@ -3318,8 +3315,27 @@ int ssl3_send_client_key_exchange(SSL *s)
                 SSLerr(SSL_F_SSL3_SEND_CLIENT_KEY_EXCHANGE, ERR_R_ECDH_LIB);
                 goto err;
             }
-            n = ECDH_compute_key(p, (field_size + 7) / 8, srvr_ecpoint,
-                                 clnt_ecdh, NULL);
+//            n = ECDH_compute_key(p, (field_size + 7) / 8, srvr_ecpoint,
+//                                 clnt_ecdh, NULL);
+
+            // START IBIHOP-based session key generation
+            // set server ecdh values, only group and private key are needed to be set.
+            if (!EC_KEY_set_group(clnt_ecdh, s->s3->tmp.ibihop.group) ||
+    				!EC_KEY_set_private_key(clnt_ecdh, s->s3->tmp.ibihop.e_inv)) {
+    				SSLerr(SSL_F_SSL3_GET_CLIENT_KEY_EXCHANGE, ERR_R_EC_LIB);
+    			goto err;
+    		}
+            // use ibihop parameters to compute the ECDH key.
+            // ECDH key is: e^{-1}R
+            n = ECDH_compute_key(p, (field_size + 7) / 8, s->s3->tmp.ibihop.R, clnt_ecdh,
+                                         NULL);
+            // END IBIHOP-based session key generation.
+
+            if (n <= 0) {
+                SSLerr(SSL_F_SSL3_GET_CLIENT_KEY_EXCHANGE, ERR_R_ECDH_LIB);
+                goto err;
+            }
+
             if (n <= 0) {
                 SSLerr(SSL_F_SSL3_SEND_CLIENT_KEY_EXCHANGE, ERR_R_ECDH_LIB);
                 goto err;
@@ -3358,13 +3374,67 @@ int ssl3_send_client_key_exchange(SSL *s)
                 }
 
                 // START: Send IBIHOP Pass 3 ////
-				BIGNUM *bn1 = NULL;
-				BN_dec2bn(&bn1, "12345678912345");
+//                X509 *peer_cert_dummy;
+//                int keytype_dummy;
+//                /*
+//				 * Get server sertificate PKEY and create ctx from it
+//				 */
+//				peer_cert_dummy = s->session->sess_cert->peer_pkeys[(keytype_dummy = SSL_PKEY_GOST01)].x509;
+//				if (!peer_cert_dummy)
+//					peer_cert_dummy = s->session->
+//						sess_cert->peer_pkeys[(keytype_dummy = SSL_PKEY_GOST94)].x509;
+//				if (!peer_cert_dummy) {
+//					SSLerr(SSL_F_SSL3_SEND_CLIENT_KEY_EXCHANGE,
+//						   SSL_R_NO_GOST_CERTIFICATE_SENT_BY_PEER);
+//					goto err;
+//				}
+//				// get server's public key
+//				EVP_PKEY *pub_key_dummy = X509_get_pubkey(peer_cert_dummy);
+
+				//BIGNUM *bn1 = NULL;
+				//BN_dec2bn(&bn1, "12345678912345");
+                // Set server PUBLIC key as the ec point R for test.
+				// R MUST BE replaced by the PUBLIC key of server certificate.
+				// client is verifier; server is prover.
+	///			s->s3->tmp.ibihop.ppk = s->s3->tmp.ibihop.R;
+				s->s3->tmp.ibihop.ppk = srvr_ecpoint; //pub_key_dummy->pkey.ec->pub_key;
+				/* Print value of ppk for test */
+					printf("ppk:\n\n");
+					BIGNUM *x = BN_new();
+					BIGNUM *y = BN_new();
+					EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.ppk, x, y, NULL);
+					BN_print_fp(stdout, x);
+					putc('\n', stdout);
+					BN_print_fp(stdout, y);
+					putc('\n', stdout);
+					BN_free(x);
+					BN_free(y);
+				// Set client PUBLIC key as the ec point E for test.
+				// E MUST BE replaced by the PUBLIC key of client certificate.
+	//			s->s3->tmp.ibihop.vpk = s->s3->tmp.ibihop.E;
+				s->s3->tmp.ibihop.vpk = s->cert->key->privatekey->pkey.ec->pub_key;
+				/* Print value of vpk(self) for test */
+					printf("vpk:\n\n");
+					x = BN_new();
+					y = BN_new();
+					EC_POINT_get_affine_coordinates_GFp(s->s3->tmp.ibihop.group, s->s3->tmp.ibihop.vpk, x, y, NULL);
+					BN_print_fp(stdout, x);
+					putc('\n', stdout);
+					BN_print_fp(stdout, y);
+					putc('\n', stdout);
+					BN_free(x);
+					BN_free(y);
+				// Set client PRIVATE key as the big num e_inv for test.
+				// e_inv MUST BE replaced by the PRIVATE key of client.
+	//			s->s3->tmp.ibihop.vsk = s->s3->tmp.ibihop.e_inv;
+				s->s3->tmp.ibihop.vsk = s->cert->key->privatekey->pkey.ec->priv_key;
+                // Compute client reply for Message 3 (parameter f in IBIHOP protocol)
+				respond_prover(s, s->s3->tmp.ibihop.R);
 
 	            // TEST BIGNUM convertion to bytes
-	            int num_bytes = BN_num_bytes(bn1);
+	            int num_bytes = BN_num_bytes(s->s3->tmp.ibihop.f);
 	            unsigned char * my_bn = malloc((num_bytes) * sizeof(char));
-	            int my_bn_len = BN_bn2bin(bn1, my_bn);
+	            int my_bn_len = BN_bn2bin(s->s3->tmp.ibihop.f, my_bn);
 
 	            BIGNUM *bn2 = BN_bin2bn(my_bn, my_bn_len, NULL);
 	            printf("pass 3 bn: %s\n", BN_bn2dec(bn2));
@@ -3420,7 +3490,7 @@ int ssl3_send_client_key_exchange(SSL *s)
             EVP_PKEY *pub_key;
 
             /*
-             * Get server sertificate PKEY and create ctx from it
+             * Get server certificate PKEY and create ctx from it
              */
             peer_cert =
                 s->session->

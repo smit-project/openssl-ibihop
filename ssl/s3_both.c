@@ -124,6 +124,48 @@
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 
+/***
+  This function checks the validity of prover and return 0 if the prover is valid.
+
+  Input:
+  	params	- structure (pointer) of verifier's system parameters.
+  	R	- EC_POINT object pointer.
+  	s	- BIGNUM object pointer.
+
+  Return:
+	0 - prover is verified.
+	1 - EC group information is not given (NULL).
+	2 - prover verification failed.
+***/
+int check_validity(SSL *s)
+{
+  if (s->s3->tmp.ibihop.group == NULL)
+    return 1;
+
+  EC_POINT *sP = EC_POINT_new(s->s3->tmp.ibihop.group);
+  EC_POINT *negR = EC_POINT_new(s->s3->tmp.ibihop.group);
+  EC_POINT *ret = EC_POINT_new(s->s3->tmp.ibihop.group);
+  EC_POINT *X = EC_POINT_new(s->s3->tmp.ibihop.group);
+  BN_CTX *ctx = BN_CTX_new();
+
+  EC_POINT_mul(s->s3->tmp.ibihop.group, sP, s->s3->tmp.ibihop.s, NULL, NULL, ctx);
+  EC_POINT_copy(negR, s->s3->tmp.ibihop.R);
+  EC_POINT_invert(s->s3->tmp.ibihop.group, negR, ctx);
+  EC_POINT_add(s->s3->tmp.ibihop.group, ret, sP, negR, ctx);
+
+  EC_POINT_mul(s->s3->tmp.ibihop.group, X, NULL, ret, s->s3->tmp.ibihop.e_inv, ctx);
+  if (EC_POINT_cmp(s->s3->tmp.ibihop.group, X, s->s3->tmp.ibihop.ppk, ctx) != 0)
+    return 2;	// verification failed.
+
+  EC_POINT_free(sP);
+  EC_POINT_free(negR);
+  EC_POINT_free(ret);
+  EC_POINT_free(X);
+  BN_CTX_free(ctx);
+
+  return 0;
+}
+
 /*
  * send s->init_buf in records of type 'type' (SSL3_RT_HANDSHAKE or
  * SSL3_RT_CHANGE_CIPHER_SPEC)
@@ -170,12 +212,13 @@ int ssl3_send_finished(SSL *s, int a, int b, const char *sender, int slen)
         // START: IBIHOP pass 4 server send //////
         if(s->server == 1) {
 
-			BIGNUM *bn1 = NULL;
-			BN_dec2bn(&bn1, "12345678912345");
+			//BIGNUM *bn1 = NULL;
+			//BN_dec2bn(&bn1, "12345678912345");
 
-			int num_bytes = BN_num_bytes(bn1);
+        	// server send value of s to client, here, client is verified.
+			int num_bytes = BN_num_bytes(s->s3->tmp.ibihop.s);
 			unsigned char * my_bn = malloc((num_bytes) * sizeof(char));
-			int my_bn_len = BN_bn2bin(bn1, my_bn);
+			int my_bn_len = BN_bn2bin(s->s3->tmp.ibihop.s, my_bn);
 
 			BIGNUM *bn2 = BN_bin2bn(my_bn, my_bn_len, NULL);
 			printf("server pass 4 bn: %s\n", BN_bn2dec(bn2));
@@ -294,8 +337,20 @@ int ssl3_get_finished(SSL *s, int a, int b)
 		int bn_len = *(p++);
 
 		BIGNUM *my_bn = BN_bin2bn(p, bn_len, NULL);
-		printf("client pass 4 bn: %s\n", BN_bn2dec(my_bn));
+		// Pass received server big num to s for verification.
+		s->s3->tmp.ibihop.s = my_bn;
+		printf("client pass 4 bn: %s\n", BN_bn2dec(s->s3->tmp.ibihop.s));
 		printf("client pass 4 bn_len: %d\n\n", bn_len);
+		// Verify server's response
+		if (check_validity(s) != 0)
+		{// verification failed, should abort handshake.
+			printf("Prover is invalid!\n");
+			//todo: abort handshake
+		}
+		else
+		{
+			printf("Prover is valid!\n");
+		}
 		p += bn_len;
 		n -= (1 + bn_len);
 

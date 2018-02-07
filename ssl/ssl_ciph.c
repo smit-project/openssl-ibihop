@@ -1522,6 +1522,11 @@ STACK_OF(SSL_CIPHER) *ssl_create_cipher_list(const SSL_METHOD *ssl_method, STACK
      * Everything else being equal, prefer ephemeral ECDH over other key
      * exchange mechanisms
      */
+    ssl_cipher_apply_rule(0, SSL_IBIHOP, 0, 0, 0, 0, 0, CIPHER_ADD, -1, &head,
+                                  &tail);
+    ssl_cipher_apply_rule(0, SSL_IBIHOP, 0, 0, 0, 0, 0, CIPHER_DEL, -1, &head,
+                                  &tail);
+
     ssl_cipher_apply_rule(0, SSL_kEECDH, 0, 0, 0, 0, 0, CIPHER_ADD, -1, &head,
                           &tail);
     ssl_cipher_apply_rule(0, SSL_kEECDH, 0, 0, 0, 0, 0, CIPHER_DEL, -1, &head,

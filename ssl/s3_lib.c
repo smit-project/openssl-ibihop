@@ -2888,6 +2888,20 @@ OPENSSL_GLOBAL SSL_CIPHER ssl3_ciphers[] = {
 
 #endif                          /* OPENSSL_NO_ECDH */
 
+	 {
+	 	 1,
+	 	 TLS1_TXT_IBIHOP_WITH_AES_256_CBC_SHA,
+	 	 TLS1_CK_IBIHOP_WITH_AES_256_CBC_SHA,
+	 	 SSL_IBIHOP,
+		 SSL_aECDSA,
+	 	 SSL_AES256,
+		 SSL_SHA256,
+		 SSL_TLSV1,
+	 	 SSL_NOT_EXP | SSL_HIGH | SSL_FIPS,
+	 	 SSL_HANDSHAKE_MAC_DEFAULT | TLS1_PRF,
+	 	 256,
+	 	 256,
+	 },
 #ifdef TEMP_GOST_TLS
 /* Cipher FF00 */
     {
@@ -4200,10 +4214,15 @@ SSL_CIPHER *ssl3_choose_cipher(SSL *s, STACK_OF(SSL_CIPHER) *clnt,
 # endif                         /* OPENSSL_NO_EC */
 #endif                          /* OPENSSL_NO_TLSEXT */
 
-        if (!ok)
-            continue;
+
+        if(sk_SSL_CIPHER_num(prio) == 1 && (alg_k & SSL_IBIHOP)) {
+        	ok = 1;
+        }
+        if (!ok) continue;
+
         ii = sk_SSL_CIPHER_find(allow, c);
         if (ii >= 0) {
+
 #if !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_TLSEXT)
             if ((alg_k & SSL_kEECDH) && (alg_a & SSL_aECDSA)
                 && s->s3->is_probably_safari) {

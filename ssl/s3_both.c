@@ -211,7 +211,7 @@ int ssl3_send_finished(SSL *s, int a, int b, const char *sender, int slen)
 
         // START: IBIHOP pass 4 server send //////
         unsigned long alg_k = s->s3->tmp.new_cipher->algorithm_mkey;
-        if(s->server == 1 && (alg_k & (SSL_kEECDH | SSL_kECDHr | SSL_kECDHe))) {
+        if(s->server == 1 && (alg_k & (SSL_IBIHOP))) {
 
 			//BIGNUM *bn1 = NULL;
 			//BN_dec2bn(&bn1, "12345678912345");
@@ -334,7 +334,7 @@ int ssl3_get_finished(SSL *s, int a, int b)
 
     // START: ibihop pass 4 client receive ///
     unsigned long alg_k = s->s3->tmp.new_cipher->algorithm_mkey;
-    if(s->server == 0 && (alg_k & (SSL_kEECDH | SSL_kECDHr | SSL_kECDHe))) {
+    if(s->server == 0 && (alg_k & (SSL_IBIHOP))) {
 
 		int bn_len = *(p++);
 

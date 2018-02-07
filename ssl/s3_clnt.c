@@ -3202,6 +3202,7 @@ int ssl3_send_client_key_exchange(SSL *s)
 
 #ifndef OPENSSL_NO_ECDH
         else if (alg_k & (SSL_kEECDH | SSL_kECDHr | SSL_kECDHe)) {
+
             const EC_GROUP *srvr_group = NULL;
             EC_KEY *tkey;
             int ecdh_clnt_cert = 0;

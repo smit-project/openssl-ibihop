@@ -346,8 +346,13 @@ int ssl3_get_finished(SSL *s, int a, int b)
 		// Verify server's response
 		if (check_validity(s) != 0)
 		{// verification failed, should abort handshake.
-			printf("Prover is invalid!\n");
-			//todo: abort handshake
+			// this error message will not be printed properly,
+			// hence a manually message will be printed to show the error.
+			al = SSL_R_SSLV3_ALERT_IBIHOP_SERVER_AUTH_FAIL;
+			SSLerr(SSL_F_SSL3_GET_FINISHED, SSL_R_SSLV3_ALERT_IBIHOP_SERVER_AUTH_FAIL);
+
+			printf("sslv3 alert IBIHOP client authentication failure.\n");
+			goto f_err;
 		}
 		else
 		{

@@ -159,6 +159,7 @@ IMPLEMENT_dtls1_meth_func(DTLS_ANY_VERSION,
                           ssl_undefined_function,
                           dtls1_get_server_method, DTLSv1_2_enc_data)
 
+
 int dtls1_accept(SSL *s)
 {
     BUF_MEM *buf;

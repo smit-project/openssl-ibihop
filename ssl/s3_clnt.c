@@ -2398,7 +2398,7 @@ int ssl3_get_certificate_request(SSL *s)
 		goto err;
 	}
 
-	ngroup = EC_GROUP_new_by_curve_name(415);
+	ngroup = EC_GROUP_new_by_curve_name(s->s3->tmp.ibihop.group->curve_name);
 	if (ngroup == NULL) {
 		SSLerr(SSL_F_SSL3_GET_KEY_EXCHANGE, ERR_R_EC_LIB);
 		goto err;

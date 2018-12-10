@@ -21,6 +21,16 @@
  OpenSSL license plus the SSLeay license), which means that you are free to
  get and use it for commercial and non-commercial purposes as long as you
  fulfill the conditions of both licenses.
+ 
+ IBIHOP is considered more efficient than traditional authentication mechanisms 
+ DH+signature (at least theoretically). IBIHOP is thus a desirable key exchange
+ mechanism for resource-constrained IoT devices and networks.
+
+ This package integrates IBIHOP into DTLS by extending the OpenSSL implementation.
+ Since DTLS is a standard protocol and widely used in IoT networks, this package
+ improves the usability of IBIHOP by making it as a new security option in the 
+ extended OpenSSL implementation. In this package, the compatibility of OpenSSL 
+ is kept.
 
  OVERVIEW
  --------
